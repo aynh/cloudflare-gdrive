@@ -131,7 +131,10 @@ class GDrive {
 		return record.files.find((item) => name === item.name);
 	};
 
-	getListings = async (parent = this.#environment.ROOT_FOLDER_ID) => {
+	getListings = async (
+		parent = this.#environment.ROOT_FOLDER_ID,
+		recursive = false
+	) => {
 		if (this.#getRecord(parent) === undefined) {
 			const result = await this.fetchListings(parent);
 
@@ -147,7 +150,21 @@ class GDrive {
 		}
 
 		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-		return this.#getRecord(parent)!;
+		const result = this.#getRecord(parent)!;
+
+		if (recursive) {
+			const next = await Promise.all(
+				result.files
+					.filter(
+						({ mimeType }) => mimeType === 'application/vnd.google-apps.folder'
+					)
+					.map(({ id }) => this.getListings(id, recursive))
+			);
+
+			result.files.push(...next.flatMap(({ files }) => files));
+		}
+
+		return result;
 	};
 
 	resolvePath = async (path: string) => {

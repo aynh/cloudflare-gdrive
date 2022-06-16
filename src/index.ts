@@ -1,3 +1,4 @@
+import { Request } from 'itty-router';
 import { ThrowableRouter, error, json, missing } from 'itty-router-extras';
 
 import { createGDrive, GDrive, GoogleDriveItem } from './gdrive';
@@ -33,23 +34,40 @@ router.get('*', initialize, async ({ gdrive, item, path }: IRequest) => {
 		: gdrive.fetchItem(item.id, true);
 });
 
-router.post('*', initialize, async ({ gdrive, item, path, url }: IRequest) => {
-	const transformItem = ({ name, ...rest }: GoogleDriveItem) => {
-		const url_ = new URL(url);
+router.post(
+	'*',
+	initialize,
+	async ({ gdrive, item, path, url, query }: IRequest) => {
+		const transformItem = ({ name, mimeType, ...rest }: GoogleDriveItem) => {
+			const url_ = new URL(url);
 
-		if (path !== name)
-			url_.pathname += !url_.pathname.endsWith('/') ? `/${name}` : name;
+			// remove all search parameter
+			url_.search = '';
 
-		return { url: url_.toString(), ...rest };
-	};
+			// only transform if it's not exact path
+			if (path !== name) {
+				url_.pathname += !url_.pathname.endsWith('/') ? `/${name}` : name;
 
-	if (item.mimeType === 'application/vnd.google-apps.folder') {
-		const listing = await gdrive.getListings(item.id);
-		return json(listing.files.map((item) => transformItem(item)));
-	} else {
-		return json([transformItem(item)]);
+				if (
+					// add trailing slash if it's a folder
+					mimeType === 'application/vnd.google-apps.folder' &&
+					!url_.pathname.endsWith('/')
+				)
+					url_.pathname += '/';
+			}
+
+			return { url: url_.toString(), ...rest };
+		};
+
+		if (item.mimeType === 'application/vnd.google-apps.folder') {
+			const recursive = query?.recursive === '1';
+			const listing = await gdrive.getListings(item.id, recursive);
+			return json(listing.files.map((item) => transformItem(item)));
+		} else {
+			return json([transformItem(item)]);
+		}
 	}
-});
+);
 
 // catch-all handler
 router.all('*', () => missing('empty'));
