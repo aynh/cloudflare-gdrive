@@ -60,7 +60,14 @@ router.post(
 		};
 
 		if (gdrive.isFolder(item)) {
-			const recursive = query?.recursive === '1';
+			const recursive_ = query?.recursive;
+
+			// check if they want to recurse with spesific depth
+			let recursive: boolean | number = Number.parseInt(recursive_ ?? '');
+
+			// check again if they want to recurse them ALL
+			if (Number.isNaN(recursive)) recursive = recursive_ === 'true';
+
 			const listing = await gdrive.getListings(item.id, recursive);
 			return json(listing.files.map((item) => transformItem(item)));
 		} else {

@@ -133,7 +133,7 @@ class GDrive {
 
 	getListings = async (
 		parent = this.#environment.ROOT_FOLDER_ID,
-		recursive = false
+		recursive?: boolean | number
 	) => {
 		if (this.#getRecord(parent) === undefined) {
 			const result = await this.fetchListings(parent);
@@ -152,7 +152,12 @@ class GDrive {
 		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 		const result = this.#getRecord(parent)!;
 
-		if (recursive) {
+		if (
+			recursive === true ||
+			(recursive !== undefined && recursive !== false && recursive > 0)
+		) {
+			if (recursive !== true) recursive -= 1;
+
 			const next = await Promise.all(
 				result.files
 					.filter((item) => this.isFolder(item))
