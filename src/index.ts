@@ -5,11 +5,27 @@ import { createGDrive, GDrive, GoogleDriveItem } from './gdrive';
 
 interface IRequest extends Request {
 	gdrive: GDrive;
+	headers: Headers;
 	item: GoogleDriveItem;
 	path: string;
 }
 
 const router = ThrowableRouter();
+
+const authorize = (request: IRequest, environment: Environment) => {
+	if (environment.BEARER_TOKEN !== undefined) {
+		const authHeader = request.headers.get('Authorization');
+
+		const regex = /(^Bearer )(?<token>.*)/;
+		const bearerToken = authHeader?.match(regex)?.groups?.token;
+		if (bearerToken === undefined || bearerToken !== environment.BEARER_TOKEN) {
+			return error(
+				403,
+				'please provide a valid bearer token in Authorization header'
+			);
+		}
+	}
+};
 
 const initialize = async (request: IRequest, environment: Environment) => {
 	const url = new URL(request.url);
@@ -36,6 +52,7 @@ router.get('*', initialize, async ({ gdrive, item, path }: IRequest) => {
 
 router.post(
 	'*',
+	authorize,
 	initialize,
 	async ({ gdrive, item, path, url, query }: IRequest) => {
 		const transformItem = ({ name, mimeType, ...rest }: GoogleDriveItem) => {
