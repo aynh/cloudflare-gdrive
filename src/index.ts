@@ -73,7 +73,12 @@ router.post(
 					url_.pathname += '/';
 			}
 
-			return { mimeType, path: url_.pathname, url: url_.toString(), ...rest };
+			return {
+				mimeType,
+				path: url_.pathname.replace(/^\//, ''),
+				url: url_.toString(),
+				...rest,
+			};
 		};
 
 		if (gdrive.isFolder(item)) {
