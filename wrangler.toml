@@ -1,0 +1,3 @@
+name = "google-drive-as-cdn"
+main = "./src/index.ts"
+compatibility_date = "2022-06-15"

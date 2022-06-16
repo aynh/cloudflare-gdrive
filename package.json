@@ -1,0 +1,34 @@
+{
+	"name": "cloudflare-workers-template",
+	"description": "A Cloudflare Workers template with Typescript and predefined opinionated ESLint and Prettier rules",
+	"version": "1.0.0",
+	"license": "MIT",
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev --local --experimental-enable-local-persistence",
+		"preview": "wrangler dev",
+		"publish": "wrangler publish",
+		"lint": "eslint --cache .",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^3.11.0",
+		"@typescript-eslint/eslint-plugin": "^5.28.0",
+		"@typescript-eslint/parser": "^5.28.0",
+		"eslint": "^8.17.0",
+		"eslint-config-prettier": "^8.5.0",
+		"eslint-define-config": "^1.5.1",
+		"eslint-import-resolver-typescript": "^2.7.1",
+		"eslint-plugin-import": "^2.26.0",
+		"eslint-plugin-sonarjs": "^0.13.0",
+		"eslint-plugin-unicorn": "^42.0.0",
+		"prettier": "^2.7.0",
+		"typescript": "^4.7.3",
+		"wrangler": "^2.0.12"
+	},
+	"dependencies": {
+		"@types/itty-router-extras": "^0.4.0",
+		"itty-router": "^2.6.1",
+		"itty-router-extras": "^0.4.2"
+	}
+}
