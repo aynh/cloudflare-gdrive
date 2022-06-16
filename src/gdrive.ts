@@ -29,7 +29,7 @@ interface GoogleDriveItem {
 	id: string;
 	name: string;
 	mimeType: string;
-	size: string;
+	size?: string;
 	imageMediaMetadata?: {
 		height: number;
 		width: number;
