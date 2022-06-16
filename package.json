@@ -1,6 +1,6 @@
 {
-	"name": "cloudflare-workers-template",
-	"description": "A Cloudflare Workers template with Typescript and predefined opinionated ESLint and Prettier rules",
+	"name": "google-drive-as-cdn",
+	"description": "Use Google Drive as CDN using Cloudflare Workers",
 	"version": "1.0.0",
 	"license": "MIT",
 	"type": "module",
