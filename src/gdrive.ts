@@ -155,7 +155,7 @@ class GDrive {
 		if (recursive) {
 			const next = await Promise.all(
 				result.files
-					.filter(({ mimeType }) => this.isFolder(mimeType))
+					.filter((item) => this.isFolder(item))
 					.map(({ id }) => this.getListings(id, recursive))
 			);
 
@@ -165,8 +165,8 @@ class GDrive {
 		return result;
 	};
 
-	isFolder = (mimeType: string) =>
-		mimeType === 'application/vnd.google-apps.folder';
+	isFolder = (item: { mimeType: string } & Partial<GoogleDriveItem>) =>
+		item.mimeType === 'application/vnd.google-apps.folder';
 
 	resolvePath = async (path: string) => {
 		if (path === '') {

@@ -29,7 +29,7 @@ const initialize = async (request: IRequest, environment: Environment) => {
 };
 
 router.get('*', initialize, async ({ gdrive, item, path }: IRequest) => {
-	return gdrive.isFolder(item.mimeType)
+	return gdrive.isFolder(item)
 		? error(400, `path '${path}' is a folder, refusing to download.`)
 		: gdrive.fetchItem(item.id, true);
 });
@@ -50,7 +50,7 @@ router.post(
 
 				if (
 					// add trailing slash if it's a folder
-					gdrive.isFolder(mimeType) &&
+					gdrive.isFolder({ mimeType }) &&
 					!url_.pathname.endsWith('/')
 				)
 					url_.pathname += '/';
@@ -59,7 +59,7 @@ router.post(
 			return { url: url_.toString(), ...rest };
 		};
 
-		if (gdrive.isFolder(item.mimeType)) {
+		if (gdrive.isFolder(item)) {
 			const recursive = query?.recursive === '1';
 			const listing = await gdrive.getListings(item.id, recursive);
 			return json(listing.files.map((item) => transformItem(item)));
