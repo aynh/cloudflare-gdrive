@@ -133,6 +133,7 @@ class GDrive {
 
 	getListings = async (
 		parent = this.#environment.ROOT_FOLDER_ID,
+		path?: string,
 		recursive?: boolean | number
 	) => {
 		if (this.#getRecord(parent) === undefined) {
@@ -146,6 +147,10 @@ class GDrive {
 				result.nextPageToken = next.nextPageToken;
 			}
 
+			result.files = result.files.map(({ name, ...rest }) => ({
+				name: path !== undefined ? `${path}/${name}` : name,
+				...rest,
+			}));
 			this.#setRecord(parent, result);
 		}
 
@@ -161,7 +166,7 @@ class GDrive {
 			const next = await Promise.all(
 				result.files
 					.filter((item) => this.isFolder(item))
-					.map(({ id }) => this.getListings(id, recursive))
+					.map(({ id, name }) => this.getListings(id, name, recursive))
 			);
 
 			result.files.push(...next.flatMap(({ files }) => files));
@@ -178,20 +183,37 @@ class GDrive {
 			return this.fetchItem(this.#environment.ROOT_FOLDER_ID);
 		}
 
+		const split = path.split('/');
 		const root = this.#environment.ROOT_FOLDER_ID;
 		const parentsId: (string | undefined)[] = [root];
+		const parentsPath: (string | undefined)[] = [undefined];
 		const items: (GoogleDriveItem | undefined)[] = [];
-		for (const [index, subPath] of path.split('/').entries()) {
-			const parent = parentsId[index];
+		for (const [index, subPath] of split.entries()) {
+			const parentId = parentsId[index];
 
 			// eslint-disable-next-line no-await-in-loop
-			const item = await this.getItem(subPath, parent);
+			const item = await this.getItem(subPath, parentId);
 
 			parentsId.push(item?.id);
+			parentsPath.push(item?.name);
 			items.push(item);
 		}
 
-		return items.at(-1);
+		return items
+			.map((item, index) => {
+				if (item !== undefined) {
+					const parentPath = parentsPath
+						.slice(0, index + 1)
+						.join('/')
+						.replace(/^\/|\/$/g, '');
+					const { name, ...rest } = item;
+					return {
+						name: parentPath !== '' ? `${parentPath}/${name}` : name,
+						...rest,
+					};
+				}
+			})
+			.at(-1);
 	};
 }
 

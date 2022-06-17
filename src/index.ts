@@ -94,7 +94,7 @@ router.post(
 			if (Number.isNaN(recursive)) recursive = recursive_ === 'true';
 
 			const folder = query?.folder !== 'false';
-			const listing = await gdrive.getListings(item.id, recursive);
+			const listing = await gdrive.getListings(item.id, path, recursive);
 			return json(
 				listing.files
 					.filter((item) => (folder ? true : !gdrive.isFolder(item)))
