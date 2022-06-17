@@ -97,7 +97,7 @@ router.post(
 			const listing = await gdrive.getListings(item.id, recursive);
 			return json(
 				listing.files
-					.filter((item) => (folder ? gdrive.isFolder(item) : true))
+					.filter((item) => (folder ? true : !gdrive.isFolder(item)))
 					.map((item) => transformItem(item, { gdrive, path, url }))
 			);
 		} else {
