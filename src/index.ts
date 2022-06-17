@@ -50,37 +50,40 @@ router.get('*', initialize, async ({ gdrive, item, path }: IRequest) => {
 		: gdrive.fetchItem(item.id, true);
 });
 
+const transformItem = (
+	{ name, mimeType, ...rest }: GoogleDriveItem,
+	{ gdrive, path, url }: Pick<IRequest, 'gdrive' | 'path' | 'url'>
+) => {
+	const url_ = new URL(url);
+
+	// remove all search parameter
+	url_.search = '';
+
+	// only transform if it's not exact path
+	if (path !== name) {
+		url_.pathname += !url_.pathname.endsWith('/') ? `/${name}` : name;
+
+		if (
+			// add trailing slash if it's a folder
+			gdrive.isFolder({ mimeType }) &&
+			!url_.pathname.endsWith('/')
+		)
+			url_.pathname += '/';
+	}
+
+	return {
+		mimeType,
+		path: url_.pathname.replace(/^\//, ''),
+		url: url_.toString(),
+		...rest,
+	};
+};
+
 router.post(
 	'*',
 	authorize,
 	initialize,
 	async ({ gdrive, item, path, url, query }: IRequest) => {
-		const transformItem = ({ name, mimeType, ...rest }: GoogleDriveItem) => {
-			const url_ = new URL(url);
-
-			// remove all search parameter
-			url_.search = '';
-
-			// only transform if it's not exact path
-			if (path !== name) {
-				url_.pathname += !url_.pathname.endsWith('/') ? `/${name}` : name;
-
-				if (
-					// add trailing slash if it's a folder
-					gdrive.isFolder({ mimeType }) &&
-					!url_.pathname.endsWith('/')
-				)
-					url_.pathname += '/';
-			}
-
-			return {
-				mimeType,
-				path: url_.pathname.replace(/^\//, ''),
-				url: url_.toString(),
-				...rest,
-			};
-		};
-
 		if (gdrive.isFolder(item)) {
 			const recursive_ = query?.recursive;
 
@@ -94,11 +97,11 @@ router.post(
 			const listing = await gdrive.getListings(item.id, recursive);
 			return json(
 				listing.files
-					.filter((item) => (folder ? gdrive.isFolder(item) : false))
-					.map((item) => transformItem(item))
+					.filter((item) => (folder ? gdrive.isFolder(item) : true))
+					.map((item) => transformItem(item, { gdrive, path, url }))
 			);
 		} else {
-			return json([transformItem(item)]);
+			return json([transformItem(item, { gdrive, path, url })]);
 		}
 	}
 );
