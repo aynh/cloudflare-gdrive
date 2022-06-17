@@ -61,7 +61,7 @@ const transformItem = (
 
 	// only transform if it's not exact path
 	if (path !== name) {
-		url_.pathname += !url_.pathname.endsWith('/') ? `/${name}` : name;
+		url_.pathname = !url_.pathname.endsWith('/') ? `/${name}` : name;
 
 		if (
 			// add trailing slash if it's a folder
