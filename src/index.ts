@@ -47,7 +47,7 @@ const initialize = async (request: IRequest, environment: Environment) => {
 router.get('*', initialize, async ({ gdrive, item, path }: IRequest) => {
 	return gdrive.isFolder(item)
 		? error(400, `path '${path}' is a folder, refusing to download.`)
-		: gdrive.fetchItem(item.id, true);
+		: new Response(await gdrive.fetchItem(item.id, true));
 });
 
 const transformItem = (
