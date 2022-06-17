@@ -90,8 +90,13 @@ router.post(
 			// check again if they want to recurse them ALL
 			if (Number.isNaN(recursive)) recursive = recursive_ === 'true';
 
+			const folder = query?.folder !== 'false';
 			const listing = await gdrive.getListings(item.id, recursive);
-			return json(listing.files.map((item) => transformItem(item)));
+			return json(
+				listing.files
+					.filter((item) => (folder ? gdrive.isFolder(item) : false))
+					.map((item) => transformItem(item))
+			);
 		} else {
 			return json([transformItem(item)]);
 		}
