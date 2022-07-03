@@ -21,6 +21,13 @@ interface GoogleDriveFilesV3Parameters {
 	[key: string]: boolean | string | number | undefined
 }
 
+interface GoogleDriveFileUploadMetadata {
+	name?: string
+	mimeType?: string
+	parents?: string[] | string
+	title?: string
+}
+
 // https://developers.google.com/drive/api/v3/reference/files#resource
 interface GoogleDriveItem {
 	id: string
@@ -62,6 +69,12 @@ class GDrive {
 		return new Headers({ Authorization: `Bearer ${this.#accessToken}` })
 	}
 
+	get #jsonHeaders() {
+		const headers = this.#headers
+		headers.append('Content-Type', 'application/json')
+		return headers
+	}
+
 	#setRecord = (key: string, value: GoogleDriveListingResponse) => {
 		this.#records[key] = value
 	}
@@ -82,6 +95,60 @@ class GDrive {
 		}
 
 		return fetch(url.toString(), { headers: this.#headers })
+	}
+
+	// using resumable upload
+	// https://developers.google.com/drive/api/guides/manage-uploads#resumable
+	uploadFile = async (metadata: GoogleDriveFileUploadMetadata, file: Blob) => {
+		const url = new URL('https://www.googleapis.com/upload/drive/v3/files')
+		url.searchParams.append('fields', this.#fileFields)
+		url.searchParams.append('uploadType', 'resumable')
+		url.searchParams.append('supportsAllDrives', 'true')
+
+		let { parents = [this.#environment.ROOT_FOLDER_ID] } = metadata
+		if (!Array.isArray(parents)) parents = [parents]
+
+		// initial request
+		const initResponse = await fetch(url.toString(), {
+			body: JSON.stringify({ ...metadata, parents }),
+			headers: this.#jsonHeaders,
+			method: 'POST',
+		})
+
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+		const putUrl = initResponse.headers.get('Location')!
+
+		// upload the content
+		const response = await fetch(putUrl, {
+			body: file,
+			headers: this.#headers,
+			method: 'PUT',
+		})
+
+		return response.json<GoogleDriveItem>()
+	}
+
+	createFolder = async (
+		name: string,
+		parent = this.#environment.ROOT_FOLDER_ID
+	) => {
+		const url = new URL('https://www.googleapis.com/drive/v3/files')
+		url.searchParams.append('fields', this.#fileFields)
+		url.searchParams.append('supportsAllDrives', 'true')
+
+		const body = {
+			mimeType: FOLDER_MIME,
+			name,
+			parents: [parent],
+		}
+
+		const response = await fetch(url.toString(), {
+			body: JSON.stringify(body),
+			headers: this.#jsonHeaders,
+			method: 'POST',
+		})
+
+		return response.json<GoogleDriveItem>()
 	}
 
 	// https://developers.google.com/drive/api/v3/reference/files/get
@@ -171,7 +238,7 @@ class GDrive {
 	}
 
 	isFolder = (item: { mimeType: string } & Partial<GoogleDriveItem>) =>
-		item.mimeType === 'application/vnd.google-apps.folder'
+		item.mimeType === FOLDER_MIME
 
 	resolvePath = async (path: string) => {
 		if (path === '') {
@@ -210,8 +277,11 @@ class GDrive {
 	}
 }
 
+const FOLDER_MIME = 'application/vnd.google-apps.folder'
+
 export {
 	createGDrive,
+	FOLDER_MIME,
 	GDrive,
 	GoogleDriveItem,
 	GoogleDriveFilesV3Parameters,

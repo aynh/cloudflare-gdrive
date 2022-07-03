@@ -70,4 +70,32 @@ const handleListings = async ({
 	}
 }
 
-export { handleDownload, handleListings }
+const handleFileUpload = async ({ gdrive, url }: IRequest, form: FormData) => {
+	const file = form.get('file')
+	const path = form.get('path')?.toString()
+	const name = form.get('name')?.toString()
+
+	if (file instanceof File && name !== undefined) {
+		const parent = await gdrive.resolvePath(path ?? '')
+
+		const response = await gdrive.uploadFile(
+			{ name, parents: parent?.id },
+			file
+		)
+
+		const parentPath = parent ? `${parent.name}/` : ''
+		return json(
+			[response].map(({ name, ...rest }) =>
+				transformItem(
+					{
+						name: `${parentPath}${name}`,
+						...rest,
+					},
+					{ gdrive, path: parentPath, url }
+				)
+			)
+		)
+	}
+}
+
+export { handleDownload, handleListings, handleFileUpload }

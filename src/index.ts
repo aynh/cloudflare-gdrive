@@ -1,6 +1,6 @@
 import { ThrowableRouter, missing } from 'itty-router-extras'
 
-import { handleDownload, handleListings } from './handler'
+import { handleDownload, handleFileUpload, handleListings } from './handler'
 import { initialize } from './middleware'
 import type { IRequest } from './types'
 
@@ -10,6 +10,19 @@ router.get('*', initialize, async (request: IRequest) => {
 	return request.query?.mode === 'list'
 		? handleListings(request)
 		: handleDownload(request)
+})
+
+router.post('*', initialize, async (request: IRequest) => {
+	const contentType = request.headers.get('Content-Type') ?? ''
+	if (contentType.startsWith('multipart/form-data') && request.formData) {
+		const form = (await request.formData()) as FormData
+		const mode = form.get('mode')
+		if (mode === 'fileupload') {
+			return handleFileUpload(request, form)
+		} else if (mode === 'urlupload') {
+			// return handleUrlUpload(request, form)
+		}
+	}
 })
 
 // catch-all handler
