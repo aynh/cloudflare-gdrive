@@ -7,5 +7,5 @@
 		"strict": true,
 		"strictNullChecks": true
 	},
-	"include": ["./src/**/*", "./.eslintrc.cjs"]
+	"include": ["./src/**/*"]
 }

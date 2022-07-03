@@ -1,111 +1,109 @@
-import { fetchAccessToken } from './oauth';
+import { fetchAccessToken } from './oauth'
 
 const createGDrive = async (environment: Environment) => {
-	const { access_token } = await fetchAccessToken(environment);
-	return new GDrive(environment, access_token);
-};
+	const { access_token } = await fetchAccessToken(environment)
+	return new GDrive(environment, access_token)
+}
 
 // https://developers.google.com/drive/api/v3/reference/files/get#http-request
 type GoogleDriveFetchItemFunction = ((
 	id: string,
 	download?: boolean
 ) => Promise<GoogleDriveItem>) &
-	((id: string, download: true) => Promise<Blob>);
+	((id: string, download: true) => Promise<Blob>)
 
 // https://developers.google.com/drive/api/v3/reference/files/list#http-request
 interface GoogleDriveFilesV3Parameters {
-	fields?: string;
-	includeItemsFromAllDrives?: boolean;
-	pageSize?: number;
-	pageToken?: string;
-	q?: string;
-	supportsAllDrives?: boolean;
-	trashed?: boolean;
-	[key: string]: boolean | string | number | undefined;
+	fields?: string
+	includeItemsFromAllDrives?: boolean
+	pageSize?: number
+	pageToken?: string
+	q?: string
+	supportsAllDrives?: boolean
+	trashed?: boolean
+	[key: string]: boolean | string | number | undefined
 }
 
 // https://developers.google.com/drive/api/v3/reference/files#resource
 interface GoogleDriveItem {
-	id: string;
-	name: string;
-	mimeType: string;
-	size?: string;
+	id: string
+	name: string
+	mimeType: string
+	size?: string
 	imageMediaMetadata?: {
-		height: number;
-		width: number;
-		rotation: string;
-	};
+		height: number
+		width: number
+		rotation: string
+	}
 }
 
 // https://developers.google.com/drive/api/v3/reference/files/list#response
 interface GoogleDriveListingResponse {
-	nextPageToken?: string;
-	files: GoogleDriveItem[];
+	nextPageToken?: string
+	files: GoogleDriveItem[]
 }
 
 class GDrive {
-	readonly #accessToken: string;
-	readonly #environment: Environment;
+	readonly #accessToken: string
+	readonly #environment: Environment
 
 	// https://developers.google.com/drive/api/v3/reference/files#resource
-	readonly #fileFields = 'id, name, mimeType, size, imageMediaMetadata';
+	readonly #fileFields = 'id, name, mimeType, size, imageMediaMetadata'
 
-	#records: Record<string, GoogleDriveListingResponse> = {};
+	#records: Record<string, GoogleDriveListingResponse> = {}
 
 	constructor(environment: Environment, accessToken: string) {
-		this.#accessToken = accessToken;
-		this.#environment = environment;
+		this.#accessToken = accessToken
+		this.#environment = environment
 	}
 
 	#getRecord = (key: string) => {
-		return this.#records[key] as GoogleDriveListingResponse | undefined;
-	};
+		return this.#records[key] as GoogleDriveListingResponse | undefined
+	}
 
 	get #headers() {
-		return new Headers({ Authorization: `Bearer ${this.#accessToken}` });
+		return new Headers({ Authorization: `Bearer ${this.#accessToken}` })
 	}
 
 	#setRecord = (key: string, value: GoogleDriveListingResponse) => {
-		this.#records[key] = value;
-	};
+		this.#records[key] = value
+	}
 
 	#fetchFilesV3 = async (
 		parameters_: GoogleDriveFilesV3Parameters,
 		id?: string
 	) => {
-		const url = new URL(
-			`https://www.googleapis.com/drive/v3/files/${id ?? ''}`
-		);
+		const url = new URL(`https://www.googleapis.com/drive/v3/files/${id ?? ''}`)
 
 		const parameters = {
 			supportsAllDrives: true,
 			...parameters_,
-		} as GoogleDriveFilesV3Parameters;
+		} as GoogleDriveFilesV3Parameters
 
 		for (const [key, value] of Object.entries(parameters)) {
-			if (value !== undefined) url.searchParams.append(key, value.toString());
+			if (value !== undefined) url.searchParams.append(key, value.toString())
 		}
 
-		return fetch(url.toString(), { headers: this.#headers });
-	};
+		return fetch(url.toString(), { headers: this.#headers })
+	}
 
 	// https://developers.google.com/drive/api/v3/reference/files/get
 	// eslint-disable-next-line unicorn/consistent-function-scoping
 	fetchItem = (async (id: string, download?: boolean) => {
-		const parameters = {} as GoogleDriveFilesV3Parameters;
+		const parameters = {} as GoogleDriveFilesV3Parameters
 
 		if (download === true) {
-			parameters.alt = 'media';
+			parameters.alt = 'media'
 		} else {
-			parameters.fields = this.#fileFields;
+			parameters.fields = this.#fileFields
 		}
 
-		const response = await this.#fetchFilesV3(parameters, id);
+		const response = await this.#fetchFilesV3(parameters, id)
 
 		return download === true
 			? response.blob()
-			: response.json<GoogleDriveItem>();
-	}) as GoogleDriveFetchItemFunction;
+			: response.json<GoogleDriveItem>()
+	}) as GoogleDriveFetchItemFunction
 
 	// https://developers.google.com/drive/api/v3/reference/files/list
 	fetchListings = async (
@@ -118,18 +116,18 @@ class GDrive {
 			nextPageToken,
 			pageSize: 1000,
 			q: `'${parent}' in parents and trashed = false`,
-		};
+		}
 
-		const response = await this.#fetchFilesV3(parameters);
+		const response = await this.#fetchFilesV3(parameters)
 
-		return response.json<GoogleDriveListingResponse>();
-	};
+		return response.json<GoogleDriveListingResponse>()
+	}
 
 	getItem = async (name: string, parent = this.#environment.ROOT_FOLDER_ID) => {
-		const record = await this.getListings(parent);
+		const record = await this.getListings(parent)
 
-		return record.files.find((item) => name === item.name);
-	};
+		return record.files.find((item) => name === item.name)
+	}
 
 	getListings = async (
 		parent = this.#environment.ROOT_FOLDER_ID,
@@ -137,66 +135,66 @@ class GDrive {
 		recursive?: boolean | number
 	) => {
 		if (this.#getRecord(parent) === undefined) {
-			const result = await this.fetchListings(parent);
+			const result = await this.fetchListings(parent)
 
 			while (result.nextPageToken !== undefined) {
 				// eslint-disable-next-line no-await-in-loop
-				const next = await this.fetchListings(parent, result.nextPageToken);
+				const next = await this.fetchListings(parent, result.nextPageToken)
 
-				result.files.push(...next.files);
-				result.nextPageToken = next.nextPageToken;
+				result.files.push(...next.files)
+				result.nextPageToken = next.nextPageToken
 			}
 
 			result.files = result.files.map(({ name, ...rest }) => ({
 				name: path !== undefined ? `${path}/${name}` : name,
 				...rest,
-			}));
-			this.#setRecord(parent, result);
+			}))
+			this.#setRecord(parent, result)
 		}
 
 		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-		const result = this.#getRecord(parent)!;
+		const result = this.#getRecord(parent)!
 
 		if (
 			recursive === true ||
 			(recursive !== undefined && recursive !== false && recursive > 0)
 		) {
-			if (recursive !== true) recursive -= 1;
+			if (recursive !== true) recursive -= 1
 
 			const next = await Promise.all(
 				result.files
 					.filter((item) => this.isFolder(item))
 					.map(({ id, name }) => this.getListings(id, name, recursive))
-			);
+			)
 
-			result.files.push(...next.flatMap(({ files }) => files));
+			result.files.push(...next.flatMap(({ files }) => files))
 		}
 
-		return result;
-	};
+		return result
+	}
 
 	isFolder = (item: { mimeType: string } & Partial<GoogleDriveItem>) =>
-		item.mimeType === 'application/vnd.google-apps.folder';
+		item.mimeType === 'application/vnd.google-apps.folder'
 
 	resolvePath = async (path: string) => {
 		if (path === '') {
-			return this.fetchItem(this.#environment.ROOT_FOLDER_ID);
+			return this.fetchItem(this.#environment.ROOT_FOLDER_ID)
 		}
 
-		const split = path.split('/');
-		const root = this.#environment.ROOT_FOLDER_ID;
-		const parentsId: (string | undefined)[] = [root];
-		const parentsPath: (string | undefined)[] = [undefined];
-		const items: (GoogleDriveItem | undefined)[] = [];
+		const split = path.split('/')
+		const root = this.#environment.ROOT_FOLDER_ID
+		const parentsId: (string | undefined)[] = [root]
+		const parentsPath: (string | undefined)[] = [undefined]
+		const items: (GoogleDriveItem | undefined)[] = []
 		for (const [index, subPath] of split.entries()) {
-			const parentId = parentsId[index];
+			const parentId = parentsId[index]
 
 			// eslint-disable-next-line no-await-in-loop
-			const item = await this.getItem(subPath, parentId);
+			const item = await this.getItem(subPath, parentId)
 
-			parentsId.push(item?.id);
-			parentsPath.push(item?.name);
-			items.push(item);
+			parentsId.push(item?.id)
+			parentsPath.push(item?.name)
+			items.push(item)
 		}
 
 		return items
@@ -205,16 +203,16 @@ class GDrive {
 					const parentPath = parentsPath
 						.slice(0, index + 1)
 						.join('/')
-						.replace(/^\/|\/$/g, '');
-					const { name, ...rest } = item;
+						.replace(/^\/|\/$/g, '')
+					const { name, ...rest } = item
 					return {
 						name: parentPath !== '' ? `${parentPath}/${name}` : name,
 						...rest,
-					};
+					}
 				}
 			})
-			.at(-1);
-	};
+			.at(-1)
+	}
 }
 
 export {
@@ -223,4 +221,4 @@ export {
 	GoogleDriveItem,
 	GoogleDriveFilesV3Parameters,
 	GoogleDriveListingResponse,
-};
+}
