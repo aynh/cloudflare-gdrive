@@ -242,7 +242,7 @@ class GDrive {
 	isFolder = (item: { mimeType: string } & Partial<GoogleDriveItem>) =>
 		item.mimeType === FOLDER_MIME
 
-	resolvePath = async (path: string) => {
+	resolvePath = async (path: string, options?: { createAsNeeded: boolean }) => {
 		if (path === '') {
 			return this.fetchItem(this.#environment.ROOT_FOLDER_ID)
 		}
@@ -256,7 +256,12 @@ class GDrive {
 			const parentId = parentsId[index]
 
 			// eslint-disable-next-line no-await-in-loop
-			const item = await this.getItem(subPath, parentId)
+			let item = await this.getItem(subPath, parentId)
+			if (options?.createAsNeeded === true && item === undefined) {
+				// eslint-disable-next-line no-await-in-loop
+				item = await this.createFolder(subPath, parentId)
+				console.log(item)
+			}
 
 			parentsId.push(item?.id)
 			parentsPath.push(item?.name)
@@ -269,7 +274,7 @@ class GDrive {
 				.slice(0, -1)
 				.join('/')
 				// remove leading and trailing slash
-				.replace(/^\/|\/$/, '')
+				.replace(/^\/|\/$/g, '')
 			const { name, ...rest } = item
 			return {
 				name: `${parent}/${name}`,

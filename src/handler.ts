@@ -42,22 +42,29 @@ const handleListings = async ({
 }
 
 const handleUpload = async (
-	{ gdrive, url }: Pick<IRequest, 'gdrive' | 'url'>,
+	{
+		authorized,
+		gdrive,
+		query,
+		url,
+	}: Pick<IRequest, 'authorized' | 'gdrive' | 'query' | 'url'>,
 	form: FormData
 ) => {
 	const file = await getFileFromFormData(form)
 	const name = form.get('name')?.toString()
 
 	if (file !== undefined && name !== undefined) {
-		const path = form.get('path')?.toString()
-		const parent = await gdrive.resolvePath(path ?? '')
+		const path = form.get('path')?.toString() ?? ''
+		const parent = await gdrive.resolvePath(path, {
+			createAsNeeded: Boolean(query?.create) && authorized === true,
+		})
 
 		const response = await gdrive.uploadFile(
 			{ name, parents: parent?.id },
 			file
 		)
 
-		const parentPath = parent ? `${parent.name}/` : ''
+		const parentPath = path !== '' && parent ? `${parent.name}/` : ''
 		return json(
 			[response].map(({ name, ...rest }) =>
 				transformItem(

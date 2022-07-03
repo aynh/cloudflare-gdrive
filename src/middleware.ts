@@ -13,6 +13,8 @@ const authorize = (request: IRequest, environment: Environment) => {
 				403,
 				'please provide a valid bearer token in Authorization header'
 			)
+		} else {
+			request.authorized = true
 		}
 	}
 }
@@ -22,7 +24,7 @@ const initialize = async (request: IRequest, environment: Environment) => {
 	const url = new URL(request.url)
 
 	// remove leading and trailing slash
-	const path = url.pathname.replace(/^\/|\/$/g, '')
+	const path = decodeURIComponent(url.pathname.replace(/^\/|\/$/g, ''))
 
 	const item = await gdrive.resolvePath(path)
 	if (item === undefined) {
