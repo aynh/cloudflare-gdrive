@@ -70,12 +70,28 @@ const handleListings = async ({
 	}
 }
 
-const handleFileUpload = async ({ gdrive, url }: IRequest, form: FormData) => {
+const getFileFromFormData = async (form: FormData) => {
+	const mode = form.get('mode')
 	const file = form.get('file')
-	const path = form.get('path')?.toString()
+	const url = form.get('url')
+
+	if (mode === 'fileupload' && file instanceof File) {
+		return file
+	} else if (mode === 'urlupload' && typeof url === 'string') {
+		const response = await fetch(url)
+		return response.blob()
+	}
+}
+
+const handleUpload = async (
+	{ gdrive, url }: Pick<IRequest, 'gdrive' | 'url'>,
+	form: FormData
+) => {
+	const file = await getFileFromFormData(form)
 	const name = form.get('name')?.toString()
 
-	if (file instanceof File && name !== undefined) {
+	if (file !== undefined && name !== undefined) {
+		const path = form.get('path')?.toString()
 		const parent = await gdrive.resolvePath(path ?? '')
 
 		const response = await gdrive.uploadFile(
@@ -98,4 +114,4 @@ const handleFileUpload = async ({ gdrive, url }: IRequest, form: FormData) => {
 	}
 }
 
-export { handleDownload, handleListings, handleFileUpload }
+export { handleDownload, handleListings, handleUpload }

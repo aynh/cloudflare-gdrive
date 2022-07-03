@@ -105,12 +105,14 @@ class GDrive {
 		url.searchParams.append('uploadType', 'resumable')
 		url.searchParams.append('supportsAllDrives', 'true')
 
-		let { parents = [this.#environment.ROOT_FOLDER_ID] } = metadata
-		if (!Array.isArray(parents)) parents = [parents]
+		const { parents = [this.#environment.ROOT_FOLDER_ID] } = metadata
 
 		// initial request
 		const initResponse = await fetch(url.toString(), {
-			body: JSON.stringify({ ...metadata, parents }),
+			body: JSON.stringify({
+				...metadata,
+				parents: Array.isArray(parents) ? parents : [parents],
+			}),
 			headers: this.#jsonHeaders,
 			method: 'POST',
 		})
