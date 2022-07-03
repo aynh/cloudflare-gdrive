@@ -26,6 +26,10 @@ const fetchAccessToken = async ({
 		method: 'POST',
 	})
 
+	if (response.status !== 200) {
+		throw new Error('Failed to get Access Token')
+	}
+
 	return response.json<AccessTokenResponse>()
 }
 
