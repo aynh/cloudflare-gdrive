@@ -1,7 +1,7 @@
 import { ThrowableRouter, missing } from 'itty-router-extras'
 
 import { handleDownload, handleUpload, handleListings } from './handler'
-import { initialize } from './middleware'
+import { authorize, initialize } from './middleware'
 import type { IRequest } from './types'
 
 const router = ThrowableRouter()
@@ -12,7 +12,7 @@ router.get('*', initialize, async (request: IRequest) => {
 		: handleDownload(request)
 })
 
-router.post('*', initialize, async (request: IRequest) => {
+router.post('*', authorize, initialize, async (request: IRequest) => {
 	const contentType = request.headers.get('Content-Type') ?? ''
 	if (contentType.startsWith('multipart/form-data') && request.formData) {
 		const form = (await request.formData()) as FormData

@@ -1,21 +1,21 @@
-import { missing } from 'itty-router-extras'
+import { error, missing } from 'itty-router-extras'
 
 import { createGDrive } from './gdrive'
 import type { IRequest } from './types'
 
-// const authorize = (request: IRequest, environment: Environment) => {
-// 	if (environment.BEARER_TOKEN !== undefined) {
-// 		const authHeader = request.headers.get('Authorization')
-// 		const regex = /(^Bearer )(?<token>.*)/
-// 		const bearerToken = authHeader?.match(regex)?.groups?.token
-// 		if (bearerToken === undefined || bearerToken !== environment.BEARER_TOKEN) {
-// 			return error(
-// 				403,
-// 				'please provide a valid bearer token in Authorization header'
-// 			)
-// 		}
-// 	}
-// }
+const authorize = (request: IRequest, environment: Environment) => {
+	if (environment.BEARER_TOKEN !== undefined) {
+		const authHeader = request.headers.get('Authorization')
+		const regex = /(^Bearer )(?<token>.*)/
+		const bearerToken = authHeader?.match(regex)?.groups?.token
+		if (bearerToken === undefined || bearerToken !== environment.BEARER_TOKEN) {
+			return error(
+				403,
+				'please provide a valid bearer token in Authorization header'
+			)
+		}
+	}
+}
 
 const initialize = async (request: IRequest, environment: Environment) => {
 	const gdrive = await createGDrive(environment)
@@ -34,4 +34,4 @@ const initialize = async (request: IRequest, environment: Environment) => {
 	request.path = path
 }
 
-export { initialize }
+export { authorize, initialize }
