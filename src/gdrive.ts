@@ -6,11 +6,8 @@ const createGDrive = async (environment: Environment) => {
 }
 
 // https://developers.google.com/drive/api/v3/reference/files/get#http-request
-type GoogleDriveFetchItemFunction = ((
-	id: string,
-	download?: boolean
-) => Promise<GoogleDriveItem>) &
-	((id: string, download: true) => Promise<Blob>)
+type GoogleDriveFetchItemFunction = ((id: string) => Promise<GoogleDriveItem>) &
+	((id: string, options: { download: true }) => Promise<Blob>)
 
 // https://developers.google.com/drive/api/v3/reference/files/list#http-request
 interface GoogleDriveFilesV3Parameters {
@@ -89,10 +86,10 @@ class GDrive {
 
 	// https://developers.google.com/drive/api/v3/reference/files/get
 	// eslint-disable-next-line unicorn/consistent-function-scoping
-	fetchItem = (async (id: string, download?: boolean) => {
+	fetchItem = (async (id: string, options?: { download: boolean }) => {
 		const parameters = {} as GoogleDriveFilesV3Parameters
 
-		if (download === true) {
+		if (options?.download === true) {
 			parameters.alt = 'media'
 		} else {
 			parameters.fields = this.#fileFields
@@ -100,7 +97,7 @@ class GDrive {
 
 		const response = await this.#fetchFilesV3(parameters, id)
 
-		return download === true
+		return options?.download === true
 			? response.blob()
 			: response.json<GoogleDriveItem>()
 	}) as GoogleDriveFetchItemFunction
@@ -197,21 +194,19 @@ class GDrive {
 			items.push(item)
 		}
 
-		return items
-			.map((item, index) => {
-				if (item !== undefined) {
-					const parentPath = parentsPath
-						.slice(0, index + 1)
-						.join('/')
-						.replace(/^\/|\/$/g, '')
-					const { name, ...rest } = item
-					return {
-						name: parentPath !== '' ? `${parentPath}/${name}` : name,
-						...rest,
-					}
-				}
-			})
-			.at(-1)
+		const item = items.at(-1)
+		if (item) {
+			const parent = parentsPath
+				.slice(0, -1)
+				.join('/')
+				// remove leading and trailing slash
+				.replace(/^\/|\/$/, '')
+			const { name, ...rest } = item
+			return {
+				name: `${parent}/${name}`,
+				...rest,
+			}
+		}
 	}
 }
 
