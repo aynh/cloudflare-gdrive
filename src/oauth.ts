@@ -1,5 +1,8 @@
-// https://datatracker.ietf.org/doc/html/rfc6749#section-4.2.2
-// 4.2.2.  Access Token Response
+import { StatusError } from 'itty-router-extras'
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.2.2
+ */
 interface AccessTokenResponse {
 	access_token: string
 	expires_in: number
@@ -7,19 +10,26 @@ interface AccessTokenResponse {
 	token_type: 'Bearer'
 }
 
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-6
+ */
+interface FetchAccessTokenOptions {
+	clientId: string
+	clientSecret: string
+	refreshToken: string
+}
+
 const fetchAccessToken = async ({
-	CLIENT_ID,
-	CLIENT_SECRET,
-	REFRESH_TOKEN,
-}: Environment) => {
+	clientId,
+	clientSecret,
+	refreshToken,
+}: FetchAccessTokenOptions) => {
 	const body = new URLSearchParams()
-	body.append('client_id', CLIENT_ID)
-	body.append('client_secret', CLIENT_SECRET)
-	body.append('refresh_token', REFRESH_TOKEN)
+	body.append('client_id', clientId)
+	body.append('client_secret', clientSecret)
+	body.append('refresh_token', refreshToken)
 	body.append('grant_type', 'refresh_token')
 
-	// https://datatracker.ietf.org/doc/html/rfc6749#section-6
-	// 6.  Refreshing an Access Token
 	const response = await fetch('https://oauth2.googleapis.com/token', {
 		body: body,
 		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -27,10 +37,13 @@ const fetchAccessToken = async ({
 	})
 
 	if (response.status !== 200) {
-		throw new Error('Failed to get Access Token')
+		const detail = await response.text()
+		throw new StatusError(500, `failed to get Access Token. ${detail}`)
 	}
 
-	return response.json<AccessTokenResponse>()
+	const json = await response.json<AccessTokenResponse>()
+
+	return json.access_token
 }
 
-export { AccessTokenResponse, fetchAccessToken }
+export { AccessTokenResponse, FetchAccessTokenOptions, fetchAccessToken }

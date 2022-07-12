@@ -1,14 +1,15 @@
 {
-	"name": "google-drive-as-cdn",
-	"description": "Use Google Drive as CDN using Cloudflare Workers",
+	"name": "cloudflare-gdrive",
 	"version": "1.0.0",
+	"description": "Leverage Google Drive as File Server (with direct download, fileupload, and urlupload feature) using Cloudflare Workers",
+	"author": "Ahmad Yasser <aynlazur@gmail.com>",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
 	"license": "MIT",
 	"type": "module",
 	"scripts": {
-		"dev": "wrangler dev --local --experimental-enable-local-persistence",
-		"preview": "wrangler dev",
-		"publish": "wrangler publish",
-		"lint": "eslint --cache .",
+		"build": "tsc",
+		"lint": "eslint .",
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
@@ -17,11 +18,19 @@
 		"@types/itty-router-extras": "^0.4.0",
 		"eslint": "^8.17.0",
 		"prettier": "^2.7.0",
-		"typescript": "^4.7.3",
-		"wrangler": "^2.0.12"
+		"typescript": "^4.7.3"
 	},
 	"dependencies": {
 		"itty-router": "^2.6.1",
 		"itty-router-extras": "^0.4.2"
-	}
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Aynh/google-drive-as-cdn.git"
+	},
+	"bugs": {
+		"url": "https://github.com/Aynh/google-drive-as-cdn/issues"
+	},
+	"homepage": "https://github.com/Aynh/google-drive-as-cdn",
+	"private": false
 }

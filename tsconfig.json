@@ -1,7 +1,11 @@
 {
 	"compilerOptions": {
+		"outDir": "./dist",
+		"declaration": true,
+		"sourceMap": true,
 		"target": "ESNext",
-		"module": "CommonJS",
+		"module": "ESNext",
+		"moduleResolution": "Node",
 		"lib": ["ESNext"],
 		"types": ["@cloudflare/workers-types"],
 		"strict": true,
