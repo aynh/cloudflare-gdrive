@@ -1,11 +1,12 @@
 {
 	"compilerOptions": {
 		"target": "ESNext",
-		"module": "CommonJS",
+		"module": "ESNext",
+		"moduleResolution": "Node",
 		"lib": ["ESNext"],
 		"types": ["@cloudflare/workers-types"],
 		"strict": true,
 		"strictNullChecks": true
 	},
-	"include": ["./src/**/*"]
+	"include": ["src"]
 }

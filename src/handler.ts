@@ -1,82 +1,81 @@
-import { error, json } from 'itty-router-extras'
+import { json, StatusError } from 'itty-router-extras'
 
-import type { IRequest } from './types'
+import { GetHandlerContext, PostHandlerContext } from './types'
 import { transformItem, getFileFromFormData } from './utils'
 
-const handleDownload = async ({
-	gdrive,
-	item,
-	path,
-}: Pick<IRequest, 'gdrive' | 'item' | 'path'>) => {
-	return gdrive.isFolder(item)
-		? error(400, `path '${path}' is a folder, refusing to download.`)
-		: new Response(await gdrive.fetchItem(item.id, { download: true }))
+const handleDownload = async ({ gdrive, item, path }: GetHandlerContext) => {
+	if (gdrive.isFolder(item))
+		throw new StatusError(
+			400,
+			`path '${path}' is a folder, refusing to download.`
+		)
+
+	return gdrive.fetchItem(item.id, 'download')
 }
 
 const handleListings = async ({
+	base,
 	gdrive,
 	item,
 	path,
 	url,
 	query,
-}: Pick<IRequest, 'gdrive' | 'item' | 'path' | 'url' | 'query'>) => {
+}: GetHandlerContext) => {
 	if (gdrive.isFolder(item)) {
-		const recursive_ = query?.recursive
+		const recursiveQuery = query.recursive ?? ''
 
-		// check if they want to recurse with spesific depth
-		let recursive: boolean | number = Number.parseInt(recursive_ ?? '')
+		// check for number or else for the truthiness
+		const recursiveDepth = Number.parseInt(recursiveQuery)
+		const recursive = Number.isNaN(recursiveDepth)
+			? Boolean(recursiveQuery)
+			: recursiveDepth
 
-		// check again if they want to recurse them all
-		if (Number.isNaN(recursive)) recursive = recursive_ === 'true'
-
-		const folder = query?.folder !== 'false'
 		const listing = await gdrive.getListings(item.id, path, recursive)
+
+		const nofolder = query.nofolder !== undefined
+		const nofile = query.nofile !== undefined
 		return json(
 			listing.files
-				.filter((item) => (folder ? true : !gdrive.isFolder(item)))
-				.map((item) => transformItem(item, { gdrive, path, url }))
+				.filter(
+					(item) =>
+						(nofolder ? !gdrive.isFolder(item) : true) &&
+						(nofile ? gdrive.isFolder(item) : true)
+				)
+				.map((item) => transformItem(item, { base, gdrive, url }))
 		)
 	} else {
-		return json([transformItem(item, { gdrive, path, url })])
+		return json([transformItem(item, { base, gdrive, url })])
 	}
 }
 
-const handleUpload = async (
-	{
-		authorized,
-		gdrive,
-		query,
-		url,
-	}: Pick<IRequest, 'authorized' | 'gdrive' | 'query' | 'url'>,
-	form: FormData
-) => {
-	const file = await getFileFromFormData(form)
-	const name = form.get('name')?.toString()
+const handleUpload = async ({
+	base,
+	form,
+	gdrive,
+	query,
+	url,
+}: PostHandlerContext) => {
+	const { blob, filename } = await getFileFromFormData(form)
+	const name = form.get('filename')?.toString() ?? filename
+	const path = form.get('path')?.toString() ?? ''
+	const parent = await gdrive.resolvePath(path, {
+		createAsNeeded: Boolean(query.create),
+	})
 
-	if (file !== undefined && name !== undefined) {
-		const path = form.get('path')?.toString() ?? ''
-		const parent = await gdrive.resolvePath(path, {
-			createAsNeeded: Boolean(query?.create) && authorized === true,
-		})
+	const item = await gdrive.uploadFile({ name, parents: parent?.id }, blob)
 
-		const response = await gdrive.uploadFile(
-			{ name, parents: parent?.id },
-			file
-		)
-
-		const parentPath = path !== '' && parent ? `${parent.name}/` : ''
-		return json(
-			[response].map(({ name, ...rest }) =>
-				transformItem(
-					{
-						name: `${parentPath}${name}`,
-						...rest,
-					},
-					{ gdrive, path: parentPath, url }
-				)
+	const parentPath = parent ? `${parent.name}/` : ''
+	return json(
+		[item].map(({ name, ...rest }) =>
+			transformItem(
+				{
+					name: `${parentPath}${name}`,
+					...rest,
+				},
+				{ base, gdrive, url }
 			)
 		)
-	}
+	)
 }
 
 export { handleDownload, handleListings, handleUpload }

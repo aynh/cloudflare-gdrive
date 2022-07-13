@@ -1,11 +1,50 @@
-import type { Request } from 'itty-router'
+import { GDrive, GDriveOptions, GoogleDriveItem } from './gdrive'
+import { FetchAccessTokenOptions } from './oauth'
 
-import { GDrive, GoogleDriveItem } from './gdrive'
-
-export interface IRequest extends Request {
-	authorized?: boolean
+interface HandlerContext {
+	base: string
 	gdrive: GDrive
-	headers: Headers
-	item: GoogleDriveItem
+	url: URL
 	path: string
+	query: Record<string, string | undefined>
+}
+
+interface GetHandlerContext extends HandlerContext {
+	item: GoogleDriveItem
+}
+
+interface PostHandlerContext extends HandlerContext {
+	form: FormData
+}
+
+type HandlerMethods = 'GET' | 'POST'
+interface HandlerOptions extends Omit<GDriveOptions, 'accessToken'> {
+	/**
+	 * route base (e.g `/api`, `/gdrive`).
+	 */
+	base?: string
+	/**
+	 * your credentials or accessToken.
+	 * @see https://developers.google.com/identity/protocols/oauth2/web-server#offline
+	 */
+	oauth: FetchAccessTokenOptions | string
+	/**
+	 * handler methods mapped with **Bearer token** to authorize the client.
+	 *
+	 * `POST` is required for safety measure because its doing writable operations (uploads and create folder)
+	 *
+	 * `GET` only used for read-only operations (fetching and downloading).
+	 */
+	requireAuth: {
+		GET?: string
+		POST: string
+	}
+}
+
+export {
+	GetHandlerContext,
+	PostHandlerContext,
+	HandlerContext,
+	HandlerMethods,
+	HandlerOptions,
 }

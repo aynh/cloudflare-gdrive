@@ -1,13 +1,8 @@
-import { fetchAccessToken } from './oauth'
-
-const createGDrive = async (environment: Environment) => {
-	const { access_token } = await fetchAccessToken(environment)
-	return new GDrive(environment, access_token)
-}
-
 // https://developers.google.com/drive/api/v3/reference/files/get#http-request
-type GoogleDriveFetchItemFunction = ((id: string) => Promise<GoogleDriveItem>) &
-	((id: string, options: { download: true }) => Promise<Blob>)
+interface FetchItemMap {
+	download: Response
+	fetch: GoogleDriveItem
+}
 
 // https://developers.google.com/drive/api/v3/reference/files/list#http-request
 interface GoogleDriveFilesV3Parameters {
@@ -28,7 +23,9 @@ interface GoogleDriveFileUploadMetadata {
 	title?: string
 }
 
-// https://developers.google.com/drive/api/v3/reference/files#resource
+/**
+ * @see https://developers.google.com/drive/api/v3/reference/files#resource
+ */
 interface GoogleDriveItem {
 	id: string
 	name: string
@@ -41,28 +38,40 @@ interface GoogleDriveItem {
 	}
 }
 
-// https://developers.google.com/drive/api/v3/reference/files/list#response
+/**
+ * @see https://developers.google.com/drive/api/v3/reference/files/list#response
+ */
 interface GoogleDriveListingResponse {
 	nextPageToken?: string
 	files: GoogleDriveItem[]
 }
 
+interface GDriveOptions {
+	accessToken: string
+	/**
+	 * @see [here](https://developers.google.com/drive/api/guides/fields-parameter). You may need to replace {@link GoogleDriveItem} to get proper typings.
+	 */
+	fileFields?: string
+	/**
+	 * id of the folder you wish to at be the root path (`/`)
+	 */
+	rootFolderId?: string
+}
+
 class GDrive {
 	readonly #accessToken: string
-	readonly #environment: Environment
+	readonly #rootFolderId: string
 
-	// https://developers.google.com/drive/api/v3/reference/files#resource
-	readonly #fileFields = 'id, name, mimeType, size, imageMediaMetadata'
+	/**
+	 * @see https://developers.google.com/drive/api/v3/reference/files#resource
+	 */
+	readonly #fileFields: string
 
-	#records: Record<string, GoogleDriveListingResponse> = {}
-
-	constructor(environment: Environment, accessToken: string) {
+	constructor({ accessToken, fileFields, rootFolderId }: GDriveOptions) {
 		this.#accessToken = accessToken
-		this.#environment = environment
-	}
-
-	#getRecord = (key: string) => {
-		return this.#records[key] as GoogleDriveListingResponse | undefined
+		this.#rootFolderId = rootFolderId ?? 'root'
+		this.#fileFields =
+			fileFields ?? 'id, name, mimeType, size, imageMediaMetadata'
 	}
 
 	get #headers() {
@@ -73,10 +82,6 @@ class GDrive {
 		const headers = this.#headers
 		headers.append('Content-Type', 'application/json')
 		return headers
-	}
-
-	#setRecord = (key: string, value: GoogleDriveListingResponse) => {
-		this.#records[key] = value
 	}
 
 	#fetchFilesV3 = async (
@@ -97,15 +102,17 @@ class GDrive {
 		return fetch(url.toString(), { headers: this.#headers })
 	}
 
-	// using resumable upload
-	// https://developers.google.com/drive/api/guides/manage-uploads#resumable
-	uploadFile = async (metadata: GoogleDriveFileUploadMetadata, file: Blob) => {
+	/**
+	 * upload file using `resumable download` method.
+	 * @see https://developers.google.com/drive/api/guides/manage-uploads#resumable
+	 */
+	uploadFile = async (metadata: GoogleDriveFileUploadMetadata, blob: Blob) => {
 		const url = new URL('https://www.googleapis.com/upload/drive/v3/files')
 		url.searchParams.append('fields', this.#fileFields)
 		url.searchParams.append('uploadType', 'resumable')
 		url.searchParams.append('supportsAllDrives', 'true')
 
-		const { parents = [this.#environment.ROOT_FOLDER_ID] } = metadata
+		const { parents = [this.#rootFolderId] } = metadata
 
 		// initial request
 		const initResponse = await fetch(url.toString(), {
@@ -122,7 +129,7 @@ class GDrive {
 
 		// upload the content
 		const response = await fetch(putUrl, {
-			body: file,
+			body: blob,
 			headers: this.#headers,
 			method: 'PUT',
 		})
@@ -130,10 +137,7 @@ class GDrive {
 		return response.json<GoogleDriveItem>()
 	}
 
-	createFolder = async (
-		name: string,
-		parent = this.#environment.ROOT_FOLDER_ID
-	) => {
+	createFolder = async (name: string, parent = this.#rootFolderId) => {
 		const url = new URL('https://www.googleapis.com/drive/v3/files')
 		url.searchParams.append('fields', this.#fileFields)
 		url.searchParams.append('supportsAllDrives', 'true')
@@ -153,12 +157,16 @@ class GDrive {
 		return response.json<GoogleDriveItem>()
 	}
 
-	// https://developers.google.com/drive/api/v3/reference/files/get
-	// eslint-disable-next-line unicorn/consistent-function-scoping
-	fetchItem = (async (id: string, options?: { download: boolean }) => {
+	/**
+	 * @see https://developers.google.com/drive/api/guides/manage-uploads#resumable
+	 */
+	fetchItem = async <K extends keyof FetchItemMap>(
+		id: string,
+		mode: K
+	): Promise<FetchItemMap[K]> => {
 		const parameters = {} as GoogleDriveFilesV3Parameters
 
-		if (options?.download === true) {
+		if (mode === 'download') {
 			parameters.alt = 'media'
 		} else {
 			parameters.fields = this.#fileFields
@@ -166,14 +174,16 @@ class GDrive {
 
 		const response = await this.#fetchFilesV3(parameters, id)
 
-		return options?.download === true
-			? response.blob()
-			: response.json<GoogleDriveItem>()
-	}) as GoogleDriveFetchItemFunction
+		return (
+			mode === 'download' ? response : response.json<GoogleDriveItem>()
+		) as FetchItemMap[K]
+	}
 
-	// https://developers.google.com/drive/api/v3/reference/files/list
+	/**
+	 * @see https://developers.google.com/drive/api/v3/reference/files/list
+	 */
 	fetchListings = async (
-		parent = this.#environment.ROOT_FOLDER_ID,
+		parent = this.#rootFolderId,
 		nextPageToken?: string
 	) => {
 		const parameters = {
@@ -189,37 +199,31 @@ class GDrive {
 		return response.json<GoogleDriveListingResponse>()
 	}
 
-	getItem = async (name: string, parent = this.#environment.ROOT_FOLDER_ID) => {
+	getItem = async (name: string, parent = this.#rootFolderId) => {
 		const record = await this.getListings(parent)
 
 		return record.files.find((item) => name === item.name)
 	}
 
 	getListings = async (
-		parent = this.#environment.ROOT_FOLDER_ID,
+		parent = this.#rootFolderId,
 		path?: string,
 		recursive?: boolean | number
 	) => {
-		if (this.#getRecord(parent) === undefined) {
-			const result = await this.fetchListings(parent)
+		const result = await this.fetchListings(parent)
 
-			while (result.nextPageToken !== undefined) {
-				// eslint-disable-next-line no-await-in-loop
-				const next = await this.fetchListings(parent, result.nextPageToken)
+		while (result.nextPageToken !== undefined) {
+			// eslint-disable-next-line no-await-in-loop
+			const next = await this.fetchListings(parent, result.nextPageToken)
 
-				result.files.push(...next.files)
-				result.nextPageToken = next.nextPageToken
-			}
-
-			result.files = result.files.map(({ name, ...rest }) => ({
-				name: path !== undefined ? `${path}/${name}` : name,
-				...rest,
-			}))
-			this.#setRecord(parent, result)
+			result.files.push(...next.files)
+			result.nextPageToken = next.nextPageToken
 		}
 
-		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-		const result = this.#getRecord(parent)!
+		result.files = result.files.map(({ name, ...rest }) => ({
+			name: path !== undefined ? `${path}/${name}` : name,
+			...rest,
+		}))
 
 		if (
 			recursive === true ||
@@ -239,16 +243,19 @@ class GDrive {
 		return result
 	}
 
-	isFolder = (item: { mimeType: string } & Partial<GoogleDriveItem>) =>
+	isFolder = (item: Pick<GoogleDriveItem, 'mimeType'>) =>
 		item.mimeType === FOLDER_MIME
 
-	resolvePath = async (path: string, options?: { createAsNeeded: boolean }) => {
+	resolvePath = async (
+		path: string,
+		options?: { createAsNeeded?: boolean }
+	) => {
 		if (path === '') {
-			return this.fetchItem(this.#environment.ROOT_FOLDER_ID)
+			return this.fetchItem(this.#rootFolderId, 'fetch')
 		}
 
 		const split = path.split('/')
-		const root = this.#environment.ROOT_FOLDER_ID
+		const root = this.#rootFolderId
 		const parentsId: (string | undefined)[] = [root]
 		const parentsPath: (string | undefined)[] = [undefined]
 		const items: (GoogleDriveItem | undefined)[] = []
@@ -270,11 +277,7 @@ class GDrive {
 
 		const item = items.at(-1)
 		if (item) {
-			const parent = parentsPath
-				.slice(0, -1)
-				.join('/')
-				// remove leading and trailing slash
-				.replace(/^\/|\/$/g, '')
+			const parent = parentsPath.slice(0, -1).join('/')
 			const { name, ...rest } = item
 			return {
 				name: `${parent}/${name}`,
@@ -287,10 +290,11 @@ class GDrive {
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 
 export {
-	createGDrive,
 	FOLDER_MIME,
 	GDrive,
+	GDriveOptions,
 	GoogleDriveItem,
+	GoogleDriveFileUploadMetadata,
 	GoogleDriveFilesV3Parameters,
 	GoogleDriveListingResponse,
 }
