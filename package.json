@@ -27,11 +27,11 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/Aynh/google-drive-as-cdn.git"
+		"url": "git+https://github.com/Aynh/cloudflare-gdrive.git"
 	},
 	"bugs": {
-		"url": "https://github.com/Aynh/google-drive-as-cdn/issues"
+		"url": "https://github.com/Aynh/cloudflare-gdrive/issues"
 	},
-	"homepage": "https://github.com/Aynh/google-drive-as-cdn",
+	"homepage": "https://github.com/Aynh/cloudflare-gdrive",
 	"private": false
 }
