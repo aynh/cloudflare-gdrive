@@ -8,9 +8,9 @@
 	"license": "MIT",
 	"type": "module",
 	"scripts": {
-		"build": "tsc",
+		"build": "tsup",
 		"lint": "eslint .",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc"
 	},
 	"devDependencies": {
 		"@aynh/eslint-config": "^1.0.0",
