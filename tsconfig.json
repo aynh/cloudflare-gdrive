@@ -1,8 +1,5 @@
 {
 	"compilerOptions": {
-		"outDir": "./dist",
-		"declaration": true,
-		"sourceMap": true,
 		"target": "ESNext",
 		"module": "ESNext",
 		"moduleResolution": "Node",
@@ -11,5 +8,5 @@
 		"strict": true,
 		"strictNullChecks": true
 	},
-	"include": ["./src/**/*"]
+	"include": ["src"]
 }
