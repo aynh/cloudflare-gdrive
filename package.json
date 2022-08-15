@@ -1,6 +1,6 @@
 {
 	"name": "cloudflare-gdrive",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Leverage Google Drive as File Server (with direct download, fileupload, and urlupload feature) using Cloudflare Workers",
 	"author": "Ahmad Yasser <aynlazur@gmail.com>",
 	"main": "dist/index.js",
