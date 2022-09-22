@@ -1,49 +1,62 @@
 import { StatusError } from 'itty-router-extras'
 
 /**
+ * @see https://developers.google.com/identity/protocols/oauth2/web-server#offline
  * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.2.2
  */
-interface AccessTokenResponse {
+interface RefreshAccessTokenResponse {
+	/** The access token issued by the authorization server. */
 	access_token: string
+
+	/**
+	 * The lifetime in seconds of the access token.  For
+	 * example, the value "3600" denotes that the access token will
+	 * expire in one hour from the time the response was generated.
+	 * If omitted, the authorization server SHOULD provide the
+	 * expiration time via other means or document the default value.
+	 */
 	expires_in: number
-	scope: string
-	token_type: 'Bearer'
 }
 
 /**
+ * @see https://developers.google.com/identity/protocols/oauth2/web-server#offline
  * @see https://datatracker.ietf.org/doc/html/rfc6749#section-6
  */
-interface FetchAccessTokenOptions {
-	clientId: string
-	clientSecret: string
-	refreshToken: string
+export interface RefreshAccessTokenParameters {
+	/** The client ID obtained from the [API Console](https://console.developers.google.com/). */
+	client_id: string
+
+	/** The client secret obtained from the [API Console](https://console.developers.google.com/). */
+	client_secret: string
+
+	/** The refresh token returned from the authorization code exchange. */
+	refresh_token: string
 }
 
-const fetchAccessToken = async ({
-	clientId,
-	clientSecret,
-	refreshToken,
-}: FetchAccessTokenOptions) => {
-	const body = new URLSearchParams()
-	body.append('client_id', clientId)
-	body.append('client_secret', clientSecret)
-	body.append('refresh_token', refreshToken)
-	body.append('grant_type', 'refresh_token')
+export const fetchAccessToken = async ({
+	client_id,
+	client_secret,
+	refresh_token,
+}: RefreshAccessTokenParameters) => {
+	const body = new URLSearchParams({
+		client_id,
+		client_secret,
+		refresh_token,
+		grant_type: 'refresh_token',
+	})
 
 	const response = await fetch('https://oauth2.googleapis.com/token', {
-		body: body,
+		body,
 		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 		method: 'POST',
 	})
 
-	if (response.status !== 200) {
-		const detail = await response.text()
-		throw new StatusError(500, `failed to get Access Token. ${detail}`)
+	if (!response.ok) {
+		const text = await response.text()
+		throw new StatusError(500, `failed to get Access Token. ${text}`)
 	}
 
-	const json = await response.json<AccessTokenResponse>()
-
-	return json.access_token
+	return response
+		.json<RefreshAccessTokenResponse>()
+		.then(({ access_token }) => access_token)
 }
-
-export { AccessTokenResponse, FetchAccessTokenOptions, fetchAccessToken }
