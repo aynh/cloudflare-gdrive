@@ -58,17 +58,21 @@ wrangler publish
 What this package does is basically map the url's paths into their Google drive's path and return their metadata _by default_. However, you could also do the _actions_ listed below using search queries:
 
 - [Downloading](#downloading)
-- [Listing](#listing)
+- [Listing](#listing-directory)
 
 > See `CloudflareGdriveResponse` JSDoc at [`./src/types.ts`](./src/types.ts) for response references.
 
 ### Downloading
 
-Use `download=1` search query. Returns the file if it's downloadable or else returns an error.
+> Use `download=1` search query.
+
+Returns the file if it's downloadable or else returns an error.
 
 ### Listing (directory)
 
-Use `list=1` search query or `listrecursive=1` to list recursively, `listrecursive=1` implies `list=1` so you don't need to specify both if you want to list recursively. Returns `CloudflareGdriveResponse` if the path is a Google drive's folder or else return an error.
+> Use `list=1` search query or `listrecursive=1` to list recursively, `listrecursive=1` implies `list=1`.
+
+Returns `CloudflareGdriveResponse` if the path is a Google drive's folder or else return an error.
 
 ## Getting Google drive oauth codes
 
