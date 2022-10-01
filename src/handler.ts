@@ -1,81 +1,83 @@
-import { json, StatusError } from 'itty-router-extras'
+import { error, json } from 'itty-router-extras'
 
-import { GetHandlerContext, PostHandlerContext } from './types'
-import { transformItem, getFileFromFormData } from './utils'
+import { GOOGLE_DRIVE_FOLDER_MIME } from './gdrive'
+import type { LocalRequest } from './middlewares'
+import type {
+  CloudflareGdriveResponseItem,
+  CloudflareGdriveOptions,
+} from './types'
 
-const handleDownload = async ({ gdrive, item, path }: GetHandlerContext) => {
-	if (gdrive.isFolder(item))
-		throw new StatusError(
-			400,
-			`path '${path}' is a folder, refusing to download.`
-		)
+type HandlerContext = Pick<LocalRequest, 'drive' | 'path' | 'paths' | 'query'>
 
-	return gdrive.fetchItem(item.id, 'download')
+export class Handler {
+  private item: CloudflareGdriveResponseItem
+  private context: HandlerContext
+  private options: CloudflareGdriveOptions
+
+  constructor(
+    item: CloudflareGdriveResponseItem,
+    context: HandlerContext,
+    options: CloudflareGdriveOptions
+  ) {
+    this.item = item
+    this.context = context
+    this.options = options
+  }
+
+  private mapItem = (
+    item: CloudflareGdriveResponseItem = this.item
+  ): CloudflareGdriveResponseItem => {
+    const { path, ...rest } = item
+    const children = item.children?.map(this.mapItem)
+
+    return {
+      ...rest,
+      path: this.mapItemPath(path),
+      children,
+    }
+  }
+
+  private mapItemPath = (path: string) => {
+    const { options } = this
+
+    const paths = path.split('/').slice(1)
+    const bases = options.base?.split('/') ?? ['']
+    return [...bases, ...paths].join('/')
+  }
+
+  default = async (): Promise<Response> => json({ items: [this.mapItem()] })
+
+  download = async (): Promise<Response> => {
+    const { item, context } = this
+
+    if (item.mime.startsWith('application/vnd.google')) {
+      return error(
+        400,
+        `path '${context.path}' is a Google Drive specific item, unable to download`
+      )
+    } else {
+      const blob = await context.drive.filesGetDownload(item.id)
+      const headers = new Headers({ 'Content-Type': item.mime })
+
+      return new Response(blob, { headers })
+    }
+  }
+
+  list = async (): Promise<Response> => {
+    const { item, context } = this
+
+    if (item.mime !== GOOGLE_DRIVE_FOLDER_MIME) {
+      return error(400, `path '${context.path} is not a folder, unable to list`)
+    } else {
+      const recursive = context.query.listrecursive === '1'
+      const items = await context.drive
+        .filesList(item.id, {
+          recursive,
+          paths: context.paths,
+        })
+        .then((items) => items.map(this.mapItem))
+
+      return json({ items })
+    }
+  }
 }
-
-const handleListings = async ({
-	base,
-	gdrive,
-	item,
-	path,
-	url,
-	query,
-}: GetHandlerContext) => {
-	if (gdrive.isFolder(item)) {
-		const recursiveQuery = query.recursive ?? ''
-
-		// check for number or else for the truthiness
-		const recursiveDepth = Number.parseInt(recursiveQuery)
-		const recursive = Number.isNaN(recursiveDepth)
-			? Boolean(recursiveQuery)
-			: recursiveDepth
-
-		const listing = await gdrive.getListings(item.id, path, recursive)
-
-		const nofolder = query.nofolder !== undefined
-		const nofile = query.nofile !== undefined
-		return json(
-			listing.files
-				.filter(
-					(item) =>
-						(nofolder ? !gdrive.isFolder(item) : true) &&
-						(nofile ? gdrive.isFolder(item) : true)
-				)
-				.map((item) => transformItem(item, { base, gdrive, url }))
-		)
-	} else {
-		return json([transformItem(item, { base, gdrive, url })])
-	}
-}
-
-const handleUpload = async ({
-	base,
-	form,
-	gdrive,
-	query,
-	url,
-}: PostHandlerContext) => {
-	const { blob, filename } = await getFileFromFormData(form)
-	const name = form.get('filename')?.toString() ?? filename
-	const path = form.get('path')?.toString() ?? ''
-	const parent = await gdrive.resolvePath(path, {
-		createAsNeeded: Boolean(query.create),
-	})
-
-	const item = await gdrive.uploadFile({ name, parents: parent?.id }, blob)
-
-	const parentPath = parent ? `${parent.name}/` : ''
-	return json(
-		[item].map(({ name, ...rest }) =>
-			transformItem(
-				{
-					name: `${parentPath}${name}`,
-					...rest,
-				},
-				{ base, gdrive, url }
-			)
-		)
-	)
-}
-
-export { handleDownload, handleListings, handleUpload }

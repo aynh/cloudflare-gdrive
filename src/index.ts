@@ -1,36 +1,31 @@
-import { missing, ThrowableRouter } from 'itty-router-extras'
+import { error, missing, ThrowableRouter } from 'itty-router-extras'
 
-import { generateContext } from './context'
-import { handleListings, handleDownload, handleUpload } from './handler'
-import { auth } from './middleware'
-import { HandlerMethods, HandlerOptions } from './types'
+import { Handler } from './handler'
+import { LocalRequest, mapRequest } from './middlewares'
+import type { CloudflareGdriveOptions } from './types'
 
-/**
- * Create `cloudflare-gdrive` handler.
- * @params {@link HandlerOptions}
- */
-export const createHandler = (options: HandlerOptions) => {
-	return async (request: Request) => {
-		const router = ThrowableRouter({ base: options.base })
+export const handle = (options: CloudflareGdriveOptions) => {
+  return async (request: Request): Promise<Response> => {
+    const router = ThrowableRouter<LocalRequest>({ base: options.base })
 
-		const authorize = () =>
-			auth(request, options.requireAuth[request.method as HandlerMethods])
+    router.get!('*', mapRequest, async ({ drive, path, paths, query }) => {
+      const item = await drive.resolvePath(paths)
 
-		router.get('*', authorize, async () => {
-			const context = await generateContext('GET', request, options)
+      if (item === undefined) return missing()
 
-			return context.query.list !== undefined
-				? handleListings(context)
-				: handleDownload(context)
-		})
+      const handle = new Handler(item, { drive, path, paths, query }, options)
 
-		router.post('*', authorize, async () => {
-			const context = await generateContext('POST', request, options)
-			return handleUpload(context)
-		})
+      if (query.download === '1') {
+        return handle.download()
+      } else if (query.list === '1' || query.listrecursive === '1') {
+        return handle.list()
+      } else {
+        return handle.default()
+      }
+    })
 
-		router.all('*', missing)
+    router.all('*', () => error(405, 'request method not supported'))
 
-		return router.handle(request) as Promise<Response>
-	}
+    return router.handle(request as LocalRequest, options)
+  }
 }

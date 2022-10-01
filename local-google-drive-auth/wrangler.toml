@@ -1,0 +1,11 @@
+name = "gdrive-auth"
+main = "dist/index.js"
+compatibility_date = "2022-09-25"
+
+[build]
+command = "yarn build"
+
+[vars]
+# rclone's client_id and client_secret
+CLIENT_ID = "202264815644.apps.googleusercontent.com"
+CLIENT_SECRET = "X4Z3ca8xfWDb1Voo-F9a7ZxJ"

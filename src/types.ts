@@ -1,50 +1,60 @@
-import { GDrive, GDriveOptions, GoogleDriveItem } from './gdrive'
-import { RefreshAccessTokenParameters } from './oauth'
+import type { RefreshAccessTokenParameters } from './oauth'
 
-interface HandlerContext {
-  base: string
-  gdrive: GDrive
-  url: URL
-  path: string
-  query: Record<string, string | undefined>
-}
-
-interface GetHandlerContext extends HandlerContext {
-  item: GoogleDriveItem
-}
-
-interface PostHandlerContext extends HandlerContext {
-  form: FormData
-}
-
-type HandlerMethods = 'GET' | 'POST'
-interface HandlerOptions extends Omit<GDriveOptions, 'accessToken'> {
-  /**
-   * route base (e.g `/api`, `/gdrive`).
+export interface CloudflareGdriveOptions {
+  /** the route base, always include a leading slash and no trailing slash
+   *
+   * @example "/api", "/gdrive"
    */
   base?: string
-  /**
-   * your credentials or accessToken.
-   * @see https://developers.google.com/identity/protocols/oauth2/web-server#offline
-   */
-  oauth: RefreshAccessTokenParameters | string
-  /**
-   * handler methods mapped with **Bearer token** to authorize the client.
+
+  /** The id of the folder mapped to `/`.
    *
-   * `POST` is required for safety measure because its doing writable operations (uploads and create folder)
-   *
-   * `GET` only used for read-only operations (fetching and downloading).
+   * @example "0AMVJ-gRi4t_9Uk9PVA"
+   * @default "root"
    */
-  requireAuth: {
-    GET?: string
-    POST: string
+  root?: string
+
+  /** Experimental options, **don't touch** if you don't know what you're doing! */
+  experimental: {
+    /** Whether to use alternative list method
+     *
+     * This alternative method can bypass Cloudflare Workers 50 subrequests limit most of the time, but it'll slow your requests speed a bit. Recursive listing of many folders or nested paths won't work without this enabled, unless well.. you're on unbounded usage model.
+     */
+    useAlternativeListMethod?: boolean
   }
+
+  oauth: RefreshAccessTokenParameters
 }
 
-export {
-  GetHandlerContext,
-  PostHandlerContext,
-  HandlerContext,
-  HandlerMethods,
-  HandlerOptions,
+export interface CloudflareGdriveResponseItem {
+  /** The item's id.
+   *
+   * @example "1j4zgTLFq0taHd7cuYqEOS6J1f0tMG4Dt"
+   */
+  id: string
+
+  /** The item's filename or name
+   *
+   * @example "text.txt"
+   */
+  name: string
+
+  /** The item's absolute path from the worker's url
+   *
+   * @example "/gdrive/test/text.txt"
+   */
+  path: string
+
+  /** The item's mime type, according to Google drive's automatic detection
+   *
+   * @see https://developers.google.com/drive/api/guides/mime-types
+   */
+  mime: string
+
+  /** The item's children, only populated on folders when listing recursively */
+  children?: CloudflareGdriveResponseItem[]
+}
+
+export interface CloudflareGdriveResponse {
+  items: CloudflareGdriveResponseItem[]
 }
