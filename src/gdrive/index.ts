@@ -15,6 +15,8 @@ const GOOGLE_DRIVE_V3_FILES_URL = 'https://www.googleapis.com/drive/v3/files/'
 const GOOGLE_DRIVE_V3_FILES_FIELDS =
   'id, name, mimeType, size, imageMediaMetadata, parents'
 
+const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8' }
+
 interface GoogleDriveV3Options {
   /** The Google Drive's `root` folder id */
   root: string
@@ -45,10 +47,6 @@ export class GoogleDriveV3 {
     return { Authorization: `Bearer ${this.#token}` }
   }
 
-  get #jsonHeaders() {
-    return { 'Content-Type': 'application/json; charset=utf-8' }
-  }
-
   set root(value: string) {
     this.#root = value
   }
@@ -75,13 +73,13 @@ export class GoogleDriveV3 {
   }
 
   filesGetDownload = async (fileId: string): Promise<Response> => {
-    const parameters: GoogleDriveV3FilesListParameters = {
+    const parameters = URLSearchParamsFromObject({
       supportsAllDrives: true,
-    }
+      alt: 'media',
+    })
 
     const url = new URL(GOOGLE_DRIVE_V3_FILES_URL + fileId)
-    url.search = URLSearchParamsFromObject({ ...parameters }).toString()
-    url.searchParams.append('alt', 'media')
+    url.search = parameters.toString()
 
     return fetch(url.toString(), { headers: this.#authHeaders })
   }
@@ -219,7 +217,7 @@ export class GoogleDriveV3 {
         name,
         parents: [parent],
       } as GoogleDriveV3FilesListFileResource),
-      headers: { ...this.#authHeaders, ...this.#jsonHeaders },
+      headers: { ...this.#authHeaders, ...JSON_HEADERS },
       method: 'POST',
     })
 
@@ -260,7 +258,7 @@ export class GoogleDriveV3 {
           name,
           parents: [parent],
         } as GoogleDriveV3FilesListFileResource),
-        headers: { ...this.#authHeaders, ...this.#jsonHeaders },
+        headers: { ...this.#authHeaders, ...JSON_HEADERS },
         method: 'POST',
       })
 
@@ -296,6 +294,19 @@ export class GoogleDriveV3 {
     }
 
     return result!
+  }
+
+  deleteFile = async (fileId: string, { trash = true } = {}): Promise<void> => {
+    const url = new URL(GOOGLE_DRIVE_V3_FILES_URL + fileId)
+    url.searchParams.append('supportsAllDrives', 'true')
+
+    const body = trash ? JSON.stringify({ trashed: true }) : undefined
+    const headers = trash
+      ? { ...this.#authHeaders, ...JSON_HEADERS }
+      : this.#authHeaders
+    const method = trash ? 'PATCH' : 'DELETE'
+
+    await fetch(url.toString(), { body, headers, method })
   }
 
   resolvePath = async (

@@ -1,4 +1,4 @@
-import { error, missing, ThrowableRouter } from 'itty-router-extras'
+import { error, missing, status, ThrowableRouter } from 'itty-router-extras'
 
 import { GetHandler, PutHandler } from './handler'
 import {
@@ -11,6 +11,18 @@ import type { CloudflareGdriveOptions } from './types'
 export const handle = (options: CloudflareGdriveOptions) => {
   return async (request: Request): Promise<Response> => {
     const router = ThrowableRouter<LocalRequest>({ base: options.base })
+
+    router.delete!(
+      '*',
+      mapRequestAndResolvePath,
+      async ({ resolved, drive, query }) => {
+        if (resolved === undefined) return missing()
+
+        await drive.deleteFile(resolved.id, { trash: query.trash === '1' })
+
+        return status(410)
+      }
+    )
 
     router.get!(
       '*',

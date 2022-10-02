@@ -55,24 +55,38 @@ wrangler publish
 
 ## Usage
 
-What this package does is basically map the url's paths into their Google drive's path and return their metadata _by default_. However, you could also do the _actions_ listed below using search queries:
+What this package does is basically map the url's paths into their Google drive's path and return their metadata (which is `CloudflareGdriveResponse`) _by default_. However, you could also do the _actions_ listed below:
 
+- [Deleting](#deleting)
 - [Downloading](#downloading)
 - [Listing](#listing-directory)
+- [Uploading](#uploading)
 
-> See `CloudflareGdriveResponse` JSDoc at [`./src/types.ts`](./src/types.ts) for response references.
+> See JSDoc at [`./src/types.ts`](./src/types.ts) for type references.
+
+### Deleting
+
+> Use `DELETE` request method and optionally `trash=1` search query if you want to trash instead of deleting permanently.
+
+Returns an empty response with 410 status code on successful delete/trash.
 
 ### Downloading
 
-> Use `download=1` search query.
+> Use `GET` request method and `download=1` search query.
 
 Returns the file if it's downloadable or else returns an error.
 
 ### Listing (directory)
 
-> Use `list=1` search query or `listrecursive=1` to list recursively, `listrecursive=1` implies `list=1`.
+> Use `GET` request method and `list=1` search query or `listrecursive=1` to list recursively, `listrecursive=1` implies `list=1`.
 
-Returns `CloudflareGdriveResponse` if the path is a Google drive's folder or else return an error.
+Returns `CloudflareGdriveResponse` if the path is a Google drive's folder or else returns an error.
+
+### Uploading
+
+> Use `PUT` request method with the file as request body.
+
+This action is intended to work with curl's [`--upload-file`](https://man.archlinux.org/man/curl.1#T,) parameter. Returns `CloudflareGdriveResponse` on successful upload.
 
 ## Getting Google drive oauth codes
 

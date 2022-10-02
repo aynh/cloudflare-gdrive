@@ -5,11 +5,13 @@ import type {
   CloudflareGdriveResponseItem,
 } from './types'
 
+type KnownQuery = 'download' | 'list' | 'listrecursive' | 'trash'
+
 export interface LocalRequest extends Request {
   drive: GoogleDriveV3
   path: string
   paths: string[]
-  query: Record<'download' | 'list' | 'listrecursive', string | undefined>
+  query: Record<KnownQuery, '1' | undefined>
   resolved?: CloudflareGdriveResponseItem
 }
 
