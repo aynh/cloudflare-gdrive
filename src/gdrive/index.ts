@@ -5,10 +5,15 @@ import type {
 } from './types'
 import { URLSearchParamsFromObject } from '../utils'
 import type { CloudflareGdriveResponseItem } from '../types'
+import { StatusError } from 'itty-router-extras'
 
 export const GOOGLE_DRIVE_FOLDER_MIME = 'application/vnd.google-apps.folder'
-const GOOGLE_DRIVE_V3_FILES_LIST_URL =
-  'https://www.googleapis.com/drive/v3/files/'
+
+const GOOGLE_DRIVE_V3_FILES_UPLOAD_URL =
+  'https://www.googleapis.com/upload/drive/v3/files'
+const GOOGLE_DRIVE_V3_FILES_URL = 'https://www.googleapis.com/drive/v3/files/'
+const GOOGLE_DRIVE_V3_FILES_FIELDS =
+  'id, name, mimeType, size, imageMediaMetadata, parents'
 
 interface GoogleDriveV3Options {
   /** The Google Drive's `root` folder id */
@@ -37,7 +42,11 @@ export class GoogleDriveV3 {
   }
 
   get #authHeaders() {
-    return new Headers({ Authorization: `Bearer ${this.#token}` })
+    return { Authorization: `Bearer ${this.#token}` }
+  }
+
+  get #jsonHeaders() {
+    return { 'Content-Type': 'application/json; charset=utf-8' }
   }
 
   set root(value: string) {
@@ -46,43 +55,35 @@ export class GoogleDriveV3 {
 
   filesGet = async (
     fileId: string,
-    paths: string[] = ['']
+    { paths = [''] } = {}
   ): Promise<CloudflareGdriveResponseItem> => {
     const parameters: GoogleDriveV3FilesListParameters = {
-      fields: 'id, name, mimeType, size, imageMediaMetadata, parents',
+      fields: GOOGLE_DRIVE_V3_FILES_FIELDS,
       includeItemsFromAllDrives: true,
       q: 'trashed = false',
       supportsAllDrives: true,
     }
 
-    const url = new URL(GOOGLE_DRIVE_V3_FILES_LIST_URL + fileId)
+    const url = new URL(GOOGLE_DRIVE_V3_FILES_URL + fileId)
     url.search = URLSearchParamsFromObject({ ...parameters }).toString()
 
     const response = await fetch(url.toString(), { headers: this.#authHeaders })
 
-    const {
-      id,
-      mimeType: mime,
-      name,
-    } = await response.json<GoogleDriveV3FilesListFileResource>()
-    const path =
-      id === this.#root || paths.length === 1 ? '/' : [...paths, name].join('/')
+    const resource = await response.json<GoogleDriveV3FilesListFileResource>()
 
-    return { id, mime, name, path }
+    return this.mapResultFn(resource, paths)
   }
 
-  filesGetDownload = async (fileId: string): Promise<Blob> => {
+  filesGetDownload = async (fileId: string): Promise<Response> => {
     const parameters: GoogleDriveV3FilesListParameters = {
       supportsAllDrives: true,
     }
 
-    const url = new URL(GOOGLE_DRIVE_V3_FILES_LIST_URL + fileId)
+    const url = new URL(GOOGLE_DRIVE_V3_FILES_URL + fileId)
     url.search = URLSearchParamsFromObject({ ...parameters }).toString()
     url.searchParams.append('alt', 'media')
 
-    const response = await fetch(url.toString(), { headers: this.#authHeaders })
-
-    return response.blob()
+    return fetch(url.toString(), { headers: this.#authHeaders })
   }
 
   filesList = async (
@@ -93,8 +94,7 @@ export class GoogleDriveV3 {
     if (!this.#useAlternativeListMethod) q += ` and '${folderId}' in parents`
 
     const parameters: GoogleDriveV3FilesListParameters = {
-      fields:
-        'nextPageToken, files(id, name, mimeType, size, imageMediaMetadata, parents)',
+      fields: `nextPageToken, files(${GOOGLE_DRIVE_V3_FILES_FIELDS})`,
       includeItemsFromAllDrives: true,
       pageSize: 1000,
       q,
@@ -112,7 +112,7 @@ export class GoogleDriveV3 {
         const search = URLSearchParamsFromObject({ ...parameters })
         if (pageToken !== undefined) search.append('pageToken', pageToken)
 
-        const url = new URL(GOOGLE_DRIVE_V3_FILES_LIST_URL)
+        const url = new URL(GOOGLE_DRIVE_V3_FILES_URL)
         url.search = search.toString()
 
         const response = await fetch(url.toString(), {
@@ -129,16 +129,9 @@ export class GoogleDriveV3 {
       resources = this.#caches!
     }
 
-    const mapResult = ({
-      id,
-      mimeType: mime,
-      name,
-    }: GoogleDriveV3FilesListFileResource): CloudflareGdriveResponseItem => ({
-      id,
-      mime,
-      name,
-      path: [...paths, name].join('/'),
-    })
+    const mapResult = (
+      it: GoogleDriveV3FilesListFileResource
+    ): CloudflareGdriveResponseItem => this.mapResultFn(it, paths)
 
     if (this.#useAlternativeListMethod) {
       this.#caches = resources
@@ -197,25 +190,143 @@ export class GoogleDriveV3 {
     }
   }
 
+  uploadStream = async (
+    stream: ReadableStream,
+    name: string,
+    { parent = this.#root, paths = [''] } = {}
+  ) => {
+    const parentItems = await this.filesList(parent)
+    const existing = parentItems.find(({ name }) => name === name)
+    if (existing !== undefined) {
+      const path = [...paths, name].join('/')
+      throw new StatusError(
+        400,
+        `unable to upload into '${path}', file already exists`
+      )
+    }
+
+    const parameters = URLSearchParamsFromObject({
+      fields: GOOGLE_DRIVE_V3_FILES_FIELDS,
+      uploadType: 'resumable',
+      supportsAllDrives: true,
+    })
+
+    const initUrl = new URL(GOOGLE_DRIVE_V3_FILES_UPLOAD_URL)
+    initUrl.search = parameters.toString()
+
+    const initResponse = await fetch(initUrl.toString(), {
+      body: JSON.stringify({
+        name,
+        parents: [parent],
+      } as GoogleDriveV3FilesListFileResource),
+      headers: { ...this.#authHeaders, ...this.#jsonHeaders },
+      method: 'POST',
+    })
+
+    const uploadUrl = initResponse.headers.get('Location')!
+
+    const response = await fetch(uploadUrl, {
+      body: stream,
+      headers: this.#authHeaders,
+      method: 'PUT',
+    })
+
+    const resource = await response.json<GoogleDriveV3FilesListFileResource>()
+
+    return this.mapResultFn(resource, paths)
+  }
+
+  createFolders = async (
+    paths: string[]
+  ): Promise<CloudflareGdriveResponseItem> => {
+    if (paths.length === 1) return this.filesGet(this.#root)
+
+    const createFolder = async (
+      name: string,
+      parent: string,
+      paths: string[]
+    ) => {
+      const parameters = URLSearchParamsFromObject({
+        fields: GOOGLE_DRIVE_V3_FILES_FIELDS,
+        supportsAllDrives: true,
+      })
+
+      const url = new URL(GOOGLE_DRIVE_V3_FILES_URL)
+      url.search = parameters.toString()
+
+      const response = await fetch(url.toString(), {
+        body: JSON.stringify({
+          mimeType: GOOGLE_DRIVE_FOLDER_MIME,
+          name,
+          parents: [parent],
+        } as GoogleDriveV3FilesListFileResource),
+        headers: { ...this.#authHeaders, ...this.#jsonHeaders },
+        method: 'POST',
+      })
+
+      const resource = await response.json<GoogleDriveV3FilesListFileResource>()
+
+      return this.mapResultFn(resource, paths)
+    }
+
+    let currentId = this.#root
+    let result: CloudflareGdriveResponseItem | undefined
+    for (const [index, segment] of paths.slice(1).entries()) {
+      const parentPaths = paths.slice(0, index + 1)
+      const files = await this.filesList(currentId, {
+        paths: parentPaths,
+      })
+
+      let child = files.find(({ name }) => name === segment)
+      if (child === undefined) {
+        child = await createFolder(segment, currentId, parentPaths)
+      }
+
+      if (child.mime !== GOOGLE_DRIVE_FOLDER_MIME) {
+        const path = [...parentPaths, child.name].join('/')
+        throw new StatusError(
+          400,
+          `unable to upload to '${paths.join('/')}', '${path}' is not a folder`
+        )
+      } else if (segment === paths.at(-1)) {
+        result = child
+      }
+
+      currentId = child.id
+    }
+
+    return result!
+  }
+
   resolvePath = async (
-    paths: string[] = ['']
+    paths: string[]
   ): Promise<CloudflareGdriveResponseItem | undefined> => {
     if (paths.length === 1) return this.filesGet(this.#root)
 
-    let current = this.#root
-    for (const [index, path] of paths.slice(1).entries()) {
-      const files = await this.filesList(current, {
+    let currentId = this.#root
+    for (const [index, segment] of paths.slice(1).entries()) {
+      const files = await this.filesList(currentId, {
         paths: paths.slice(0, index + 1),
       })
-      const child = files.find(({ name }) => name === path)
+      const child = files.find(({ name }) => name === segment)
 
       if (child === undefined) return
-      else if (path === paths.at(-1)) return child
+      else if (segment === paths.at(-1)) return child
       else if (child.mime !== GOOGLE_DRIVE_FOLDER_MIME) return
 
-      current = child.id
+      currentId = child.id
     }
 
     return
   }
+
+  mapResultFn = (
+    { id, mimeType: mime, name }: GoogleDriveV3FilesListFileResource,
+    paths: string[]
+  ): CloudflareGdriveResponseItem => ({
+    id,
+    mime,
+    name,
+    path: this.#root === id ? '/' : [...paths, name].join('/'),
+  })
 }

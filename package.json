@@ -3,8 +3,9 @@
   "version": "1.0.1",
   "description": "Use Google Drive as File Server on Cloudflare Workers",
   "author": "Ahmad Yasser <aynlazur@gmail.com>",
-  "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "license": "MIT",
   "type": "module",
   "scripts": {

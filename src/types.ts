@@ -15,7 +15,7 @@ export interface CloudflareGdriveOptions {
   root?: string
 
   /** Experimental options, **don't touch** if you don't know what you're doing! */
-  experimental: {
+  experimental?: {
     /** Whether to use alternative list method
      *
      * This alternative method can bypass Cloudflare Workers 50 subrequests limit most of the time, but it'll slow your requests speed a bit. Recursive listing of many folders or nested paths won't work without this enabled, unless well.. you're on unbounded usage model.

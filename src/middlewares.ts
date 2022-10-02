@@ -1,12 +1,16 @@
 import { GoogleDriveV3 } from './gdrive'
 import { fetchAccessToken } from './oauth'
-import type { CloudflareGdriveOptions } from './types'
+import type {
+  CloudflareGdriveOptions,
+  CloudflareGdriveResponseItem,
+} from './types'
 
 export interface LocalRequest extends Request {
   drive: GoogleDriveV3
   path: string
   paths: string[]
   query: Record<'download' | 'list' | 'listrecursive', string | undefined>
+  resolved?: CloudflareGdriveResponseItem
 }
 
 export const mapRequest = async (
@@ -17,7 +21,7 @@ export const mapRequest = async (
   request.drive = new GoogleDriveV3({
     root,
     token,
-    useAlternativeListMethod: true,
+    useAlternativeListMethod: false,
   })
 
   if (root === 'root') {
@@ -28,8 +32,16 @@ export const mapRequest = async (
   }
 
   const url = new URL(request.url)
-  const path = url.pathname.replace(base, '')
-  request.path = path
-  request.paths = path === '/' ? [''] : path.split('/')
+  request.path = url.pathname.replace(base, '')
+  request.paths = request.path === '/' ? [''] : request.path.split('/')
   request.query = Object.fromEntries(url.searchParams.entries()) as any
+}
+
+export const mapRequestAndResolvePath = async (
+  request: LocalRequest,
+  options: CloudflareGdriveOptions
+) => {
+  await mapRequest(request, options)
+
+  request.resolved = await request.drive.resolvePath(request.paths)
 }

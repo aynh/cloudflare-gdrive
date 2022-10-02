@@ -1,3 +1,9 @@
+import { json } from 'itty-router-extras'
+import type {
+  CloudflareGdriveResponse,
+  CloudflareGdriveResponseItem,
+} from './types'
+
 interface ToString {
   toString: () => string
 }
@@ -9,4 +15,13 @@ export const URLSearchParamsFromObject = (record: Record<string, ToString>) => {
   }
 
   return search
+}
+
+export const responseFromItem = (
+  item: CloudflareGdriveResponseItem | CloudflareGdriveResponseItem[]
+): Response => {
+  const items = Array.isArray(item) ? item : [item]
+  const response: CloudflareGdriveResponse = { items }
+
+  return json(response)
 }

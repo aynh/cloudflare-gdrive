@@ -1,4 +1,4 @@
-import { error, json } from 'itty-router-extras'
+import { error } from 'itty-router-extras'
 
 import { GOOGLE_DRIVE_FOLDER_MIME } from './gdrive'
 import type { LocalRequest } from './middlewares'
@@ -6,35 +6,17 @@ import type {
   CloudflareGdriveResponseItem,
   CloudflareGdriveOptions,
 } from './types'
+import { responseFromItem } from './utils'
 
 type HandlerContext = Pick<LocalRequest, 'drive' | 'path' | 'paths' | 'query'>
 
-export class Handler {
-  private item: CloudflareGdriveResponseItem
-  private context: HandlerContext
-  private options: CloudflareGdriveOptions
+class Handler {
+  protected context: HandlerContext
+  protected options: CloudflareGdriveOptions
 
-  constructor(
-    item: CloudflareGdriveResponseItem,
-    context: HandlerContext,
-    options: CloudflareGdriveOptions
-  ) {
-    this.item = item
+  constructor(context: HandlerContext, options: CloudflareGdriveOptions) {
     this.context = context
     this.options = options
-  }
-
-  private mapItem = (
-    item: CloudflareGdriveResponseItem = this.item
-  ): CloudflareGdriveResponseItem => {
-    const { path, ...rest } = item
-    const children = item.children?.map(this.mapItem)
-
-    return {
-      ...rest,
-      path: this.mapItemPath(path),
-      children,
-    }
   }
 
   private mapItemPath = (path: string) => {
@@ -45,9 +27,36 @@ export class Handler {
     return [...bases, ...paths].join('/')
   }
 
-  default = async (): Promise<Response> => json({ items: [this.mapItem()] })
+  protected mapItem = (
+    item: CloudflareGdriveResponseItem
+  ): CloudflareGdriveResponseItem => {
+    const { path, ...rest } = item
+    const children = item.children?.map(this.mapItem)
 
-  download = async (): Promise<Response> => {
+    return {
+      ...rest,
+      path: this.mapItemPath(path),
+      children,
+    }
+  }
+}
+
+export class GetHandler extends Handler {
+  private item: CloudflareGdriveResponseItem
+
+  constructor(
+    item: CloudflareGdriveResponseItem,
+    context: HandlerContext,
+    options: CloudflareGdriveOptions
+  ) {
+    super(context, options)
+    this.item = item
+  }
+
+  private default = async (): Promise<Response> =>
+    responseFromItem(this.mapItem(this.item))
+
+  private download = async (): Promise<Response> => {
     const { item, context } = this
 
     if (item.mime.startsWith('application/vnd.google')) {
@@ -56,14 +65,22 @@ export class Handler {
         `path '${context.path}' is a Google Drive specific item, unable to download`
       )
     } else {
-      const blob = await context.drive.filesGetDownload(item.id)
-      const headers = new Headers({ 'Content-Type': item.mime })
+      const response = await context.drive.filesGetDownload(item.id)
 
-      return new Response(blob, { headers })
+      if (response.body === null)
+        return error(
+          500,
+          `failed to download '${context.path}', response body is empty`
+        )
+
+      const { readable, writable } = new TransformStream()
+      response.body.pipeTo(writable)
+
+      return new Response(readable, { headers: response.headers })
     }
   }
 
-  list = async (): Promise<Response> => {
+  private list = async (): Promise<Response> => {
     const { item, context } = this
 
     if (item.mime !== GOOGLE_DRIVE_FOLDER_MIME) {
@@ -77,7 +94,45 @@ export class Handler {
         })
         .then((items) => items.map(this.mapItem))
 
-      return json({ items })
+      return responseFromItem(items)
     }
+  }
+
+  handle = async (): Promise<Response> => {
+    const { query } = this.context
+
+    if (query.download === '1') {
+      return this.download()
+    } else if (query.list === '1' || query.listrecursive === '1') {
+      return this.list()
+    } else {
+      return this.default()
+    }
+  }
+}
+
+export class PutHandler extends Handler {
+  private stream: ReadableStream
+
+  constructor(
+    stream: ReadableStream,
+    context: HandlerContext,
+    options: CloudflareGdriveOptions
+  ) {
+    super(context, options)
+    this.stream = stream
+  }
+
+  upload = async (): Promise<Response> => {
+    const { drive, paths } = this.context
+
+    const parentPaths = paths.slice(0, -1)
+    const parent = await drive.createFolders(parentPaths)
+    const result = await drive.uploadStream(this.stream, paths.at(-1)!, {
+      parent: parent.id,
+      paths: parentPaths,
+    })
+
+    return responseFromItem(this.mapItem(result))
   }
 }
